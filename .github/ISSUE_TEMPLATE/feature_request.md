@@ -1,3 +1,11 @@
+---
+name: Feature Request
+about: Suggerisci una nuova funzionalità per il progetto
+title: "[FEATURE] "
+labels: enhancement
+assignees: ""
+---
+
 # 📋 Modulo Raccolta Requisiti: Ottimizzazione Container
 
 > **Istruzioni per l'utente:** Compila questo documento per aiutarci a capire esattamente le tue necessità di magazzino. Sostituisci i testi tra parentesi quadre `[...]` con le tue risposte e spunta le caselle `[x]` pertinenti.

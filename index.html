@@ -1,10 +1,141 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="it" ng-app="sommaApp">
 <head>
   <meta charset="UTF-8">
-  <title>Ciao</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calcolatore Somma</title>
+  <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.8.3/angular.min.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      padding: 40px;
+      width: 100%;
+      max-width: 420px;
+      text-align: center;
+    }
+
+    h1 {
+      color: #4a4a8a;
+      margin-bottom: 28px;
+      font-size: 1.8rem;
+    }
+
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    input[type="number"] {
+      width: 100%;
+      padding: 12px 16px;
+      font-size: 1.1rem;
+      border: 2px solid #d1d5db;
+      border-radius: 8px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input[type="number"]:focus {
+      border-color: #667eea;
+    }
+
+    button {
+      width: 100%;
+      padding: 13px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #fff;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    button:active {
+      transform: scale(0.98);
+    }
+
+    .result {
+      margin-top: 24px;
+      padding: 16px;
+      background: #f3f4f6;
+      border-radius: 8px;
+      font-size: 1.2rem;
+      color: #374151;
+      min-height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .result span {
+      font-weight: 700;
+      color: #4a4a8a;
+      font-size: 1.5rem;
+    }
+
+    .result .errore {
+      color: #dc2626;
+      font-size: 1rem;
+      font-weight: 600;
+    }
+  </style>
 </head>
 <body>
-  <p>ciao ciao</p>
+  <div class="card" ng-controller="SommaController">
+    <h1>🔢 Calcolatore</h1>
+    <div class="input-group">
+      <input type="number" ng-model="numero1" placeholder="Primo numero" />
+      <input type="number" ng-model="numero2" placeholder="Secondo numero" />
+    </div>
+    <button ng-click="calcola()">Somma</button>
+    <div class="result" ng-if="risultato.show">
+      <span ng-if="risultato.errore" class="errore">{{ risultato.messaggio }}</span>
+      <span ng-if="!risultato.errore">Risultato:&nbsp;<strong>{{ risultato.valore }}</strong></span>
+    </div>
+  </div>
+
+  <script>
+    angular.module('sommaApp', [])
+      .controller('SommaController', ['$scope', function($scope) {
+        $scope.numero1 = null;
+        $scope.numero2 = null;
+        $scope.risultato = { show: false };
+
+        $scope.calcola = function() {
+          var n1 = parseFloat($scope.numero1);
+          var n2 = parseFloat($scope.numero2);
+          if (!isNaN(n1) && !isNaN(n2)) {
+            $scope.risultato = { show: true, errore: false, valore: n1 + n2 };
+          } else {
+            $scope.risultato = { show: true, errore: true, messaggio: 'Inserisci due numeri validi' };
+          }
+        };
+      }]);
+  </script>
 </body>
 </html>

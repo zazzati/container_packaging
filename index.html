@@ -1,141 +1,711 @@
 <!DOCTYPE html>
-<html lang="it" ng-app="sommaApp">
+<html lang="it" ng-app="containerApp">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Calcolatore Somma</title>
-  <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.8.3/angular.min.js"></script>
+  <title>Ottimizzazione Carico Container</title>
+  <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.8.3/angular.min.js"
+          integrity="sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb"
+          crossorigin="anonymous"></script>
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    /* ── Reset & base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: #f0f4f8;
+      color: #1e293b;
       min-height: 100vh;
+    }
+
+    /* ── Top bar ── */
+    .topbar {
+      background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+      color: #fff;
+      padding: 16px 32px;
       display: flex;
       align-items: center;
-      justify-content: center;
+      gap: 14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.25);
     }
+    .topbar .logo { font-size: 2rem; }
+    .topbar h1 { font-size: 1.35rem; font-weight: 700; letter-spacing: .3px; }
+    .topbar p  { font-size: .85rem; opacity: .82; margin-top: 2px; }
 
-    .card {
+    /* ── Main layout ── */
+    .main { max-width: 1400px; margin: 0 auto; padding: 28px 20px 60px; }
+
+    /* ── Panels ── */
+    .panel {
       background: #fff;
       border-radius: 12px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-      padding: 40px;
-      width: 100%;
-      max-width: 420px;
-      text-align: center;
-    }
-
-    h1 {
-      color: #4a4a8a;
-      margin-bottom: 28px;
-      font-size: 1.8rem;
-    }
-
-    .input-group {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
+      box-shadow: 0 2px 10px rgba(0,0,0,.08);
       margin-bottom: 24px;
+      overflow: hidden;
     }
-
-    input[type="number"] {
-      width: 100%;
-      padding: 12px 16px;
-      font-size: 1.1rem;
-      border: 2px solid #d1d5db;
-      border-radius: 8px;
-      outline: none;
-      transition: border-color 0.2s;
+    .panel-header {
+      background: #f8fafc;
+      border-bottom: 1px solid #e2e8f0;
+      padding: 14px 20px;
+      font-weight: 700;
+      font-size: 1rem;
+      color: #1e3a5f;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
+    .panel-body { padding: 20px; }
 
-    input[type="number"]:focus {
-      border-color: #667eea;
+    /* ── Container type cards ── */
+    .container-cards {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
     }
-
-    button {
-      width: 100%;
-      padding: 13px;
-      font-size: 1.1rem;
-      font-weight: 600;
+    .container-card {
+      border: 2px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 16px 20px;
+      cursor: pointer;
+      flex: 1 1 200px;
+      transition: border-color .18s, box-shadow .18s, background .18s;
+    }
+    .container-card:hover {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+    }
+    .container-card.selected {
+      border-color: #2563eb;
+      background: #eff6ff;
+      box-shadow: 0 0 0 3px rgba(37,99,235,.18);
+    }
+    .container-card .card-title { font-weight: 700; font-size: 1rem; color: #1e3a5f; margin-bottom: 6px; }
+    .container-card .card-stat  { font-size: .82rem; color: #64748b; }
+    .container-card .card-stat span { font-weight: 600; color: #0f172a; }
+    .container-card .card-badge {
+      display: inline-block;
+      margin-top: 10px;
+      background: #2563eb;
       color: #fff;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      font-size: .72rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 20px;
+    }
+
+    /* ── Input table ── */
+    .table-wrapper { overflow-x: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .88rem;
+    }
+    thead th {
+      background: #1e3a5f;
+      color: #fff;
+      padding: 10px 10px;
+      text-align: left;
+      white-space: nowrap;
+      font-weight: 600;
+    }
+    thead th:first-child { border-radius: 6px 0 0 0; }
+    thead th:last-child  { border-radius: 0 6px 0 0; }
+    tbody tr { border-bottom: 1px solid #e2e8f0; }
+    tbody tr:nth-child(even) { background: #f8fafc; }
+    tbody tr:hover { background: #eff6ff; }
+    tbody td { padding: 8px 8px; vertical-align: middle; }
+
+    .tbl-input {
+      width: 100%;
+      padding: 6px 8px;
+      font-size: .85rem;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      outline: none;
+      transition: border-color .15s;
+      background: #fff;
+    }
+    .tbl-input:focus { border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,.15); }
+    .tbl-input.invalid { border-color: #ef4444; }
+
+    select.tbl-input { cursor: pointer; }
+
+    /* row actions */
+    .btn-del {
+      background: none;
+      border: none;
+      color: #ef4444;
+      font-size: 1.1rem;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 6px;
+      transition: background .15s;
+    }
+    .btn-del:hover { background: #fee2e2; }
+
+    /* ── Action buttons ── */
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 20px;
+      font-size: .9rem;
+      font-weight: 600;
       border: none;
       border-radius: 8px;
       cursor: pointer;
-      transition: opacity 0.2s, transform 0.1s;
+      transition: opacity .15s, transform .1s;
     }
-
-    button:hover {
-      opacity: 0.9;
-    }
-
-    button:active {
-      transform: scale(0.98);
-    }
-
-    .result {
-      margin-top: 24px;
-      padding: 16px;
-      background: #f3f4f6;
-      border-radius: 8px;
-      font-size: 1.2rem;
+    .btn:hover  { opacity: .88; }
+    .btn:active { transform: scale(.97); }
+    .btn-primary { background: #2563eb; color: #fff; }
+    .btn-success { background: #16a34a; color: #fff; }
+    .btn-outline {
+      background: #fff;
       color: #374151;
-      min-height: 56px;
+      border: 1.5px solid #d1d5db;
+    }
+    .btn-outline:hover { background: #f9fafb; }
+
+    /* ── Error banner ── */
+    .error-banner {
+      background: #fef2f2;
+      border: 1px solid #fca5a5;
+      color: #991b1b;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      font-size: .88rem;
+    }
+
+    /* ── Results ── */
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 18px 20px;
+      text-align: center;
+    }
+    .stat-card .stat-value { font-size: 2rem; font-weight: 800; color: #1e3a5f; }
+    .stat-card .stat-label { font-size: .82rem; color: #64748b; margin-top: 4px; }
+
+    /* container result cards */
+    .cont-result-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      gap: 20px;
+    }
+    .cont-result-card {
+      border: 2px solid #e2e8f0;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .cont-result-header {
+      background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+      color: #fff;
+      padding: 14px 18px;
       display: flex;
       align-items: center;
-      justify-content: center;
+      justify-content: space-between;
     }
-
-    .result span {
+    .cont-result-header .cont-name { font-weight: 700; font-size: 1rem; }
+    .cont-result-header .cont-num  {
+      background: rgba(255,255,255,.25);
       font-weight: 700;
-      color: #4a4a8a;
-      font-size: 1.5rem;
+      font-size: .85rem;
+      padding: 3px 10px;
+      border-radius: 20px;
     }
 
-    .result .errore {
-      color: #dc2626;
-      font-size: 1rem;
-      font-weight: 600;
+    /* utilization bars */
+    .util-bars { padding: 14px 18px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+    .util-row { display: flex; align-items: center; gap: 10px; font-size: .8rem; margin-bottom: 8px; }
+    .util-row:last-child { margin-bottom: 0; }
+    .util-label { width: 60px; color: #64748b; font-weight: 600; }
+    .util-bar-wrap { flex: 1; background: #e2e8f0; border-radius: 20px; height: 10px; overflow: hidden; }
+    .util-bar-fill {
+      height: 100%;
+      border-radius: 20px;
+      transition: width .4s ease;
+    }
+    .util-bar-fill.vol { background: #2563eb; }
+    .util-bar-fill.wgt { background: #16a34a; }
+    .util-bar-fill.danger { background: #ef4444; }
+    .util-pct { width: 44px; text-align: right; font-weight: 700; color: #0f172a; font-size: .8rem; }
+
+    /* pallet list inside result card */
+    .pallet-list { padding: 0 18px 14px; }
+    .pallet-list-title {
+      font-size: .78rem;
+      font-weight: 700;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin: 12px 0 8px;
+    }
+    .pallet-list table {
+      font-size: .78rem;
+    }
+    .pallet-list thead th {
+      background: #e2e8f0;
+      color: #374151;
+      padding: 6px 8px;
+      font-size: .75rem;
+    }
+    .pallet-list thead th:first-child { border-radius: 4px 0 0 0; }
+    .pallet-list thead th:last-child  { border-radius: 0 4px 0 0; }
+    .pallet-list tbody td { padding: 5px 8px; }
+
+    /* ── Responsive ── */
+    @media (max-width: 640px) {
+      .topbar h1 { font-size: 1.1rem; }
+      .cont-result-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
-<body>
-  <div class="card" ng-controller="SommaController">
-    <h1>🔢 Calcolatore</h1>
-    <div class="input-group">
-      <input type="number" ng-model="numero1" placeholder="Primo numero" />
-      <input type="number" ng-model="numero2" placeholder="Secondo numero" />
-    </div>
-    <button ng-click="calcola()">Somma</button>
-    <div class="result" ng-if="risultato.show">
-      <span ng-if="risultato.errore" class="errore">{{ risultato.messaggio }}</span>
-      <span ng-if="!risultato.errore">Risultato:&nbsp;<strong>{{ risultato.valore }}</strong></span>
+<body ng-controller="ContainerController">
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="logo">🚢</div>
+    <div>
+      <h1>Ottimizzazione Carico Container</h1>
+      <p>Calcola e ottimizza la distribuzione di pallet/colli nei container marittimi</p>
     </div>
   </div>
 
-  <script>
-    angular.module('sommaApp', [])
-      .controller('SommaController', ['$scope', function($scope) {
-        $scope.numero1 = null;
-        $scope.numero2 = null;
-        $scope.risultato = { show: false };
+  <div class="main">
 
-        $scope.calcola = function() {
-          var n1 = parseFloat($scope.numero1);
-          var n2 = parseFloat($scope.numero2);
-          if (!isNaN(n1) && !isNaN(n2)) {
-            $scope.risultato = { show: true, errore: false, valore: n1 + n2 };
-          } else {
-            $scope.risultato = { show: true, errore: true, messaggio: 'Inserisci due numeri validi' };
+    <!-- Loading indicator -->
+    <div class="panel" ng-if="loading">
+      <div class="panel-body" style="text-align:center; padding: 40px; color:#64748b;">
+        ⏳ Caricamento tipi container…
+      </div>
+    </div>
+
+    <!-- Load error fallback -->
+    <div class="error-banner" ng-if="loadError">
+      ⚠️ Impossibile caricare <code>containers.json</code>: utilizzo dati predefiniti.
+    </div>
+
+    <!-- Step 1 – Choose container type -->
+    <div class="panel" ng-if="!loading">
+      <div class="panel-header">📦 1. Seleziona il tipo di container</div>
+      <div class="panel-body">
+        <div class="container-cards">
+          <div class="container-card"
+               ng-repeat="ct in containerTypes"
+               ng-class="{selected: selectedContainer.id === ct.id}"
+               ng-click="selectContainer(ct)">
+            <div class="card-title">{{ ct.name }}</div>
+            <div class="card-stat">Volume: <span>{{ ct.volume_cbm }} m³</span></div>
+            <div class="card-stat">Payload max: <span>{{ ct.max_payload_kg | number:0 }} kg</span></div>
+            <div class="card-stat" style="font-size:.78rem; color:#94a3b8; margin-top:4px;">{{ ct.description }}</div>
+            <div class="card-badge" ng-if="selectedContainer.id === ct.id">✔ Selezionato</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2 – Pallet input -->
+    <div class="panel" ng-if="!loading">
+      <div class="panel-header">📋 2. Inserisci i dati dei colli / pallet</div>
+      <div class="panel-body">
+
+        <div class="error-banner" ng-if="formError">{{ formError }}</div>
+
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:90px;">Item / ID</th>
+                <th>Descrizione</th>
+                <th style="width:80px;">L</th>
+                <th style="width:80px;">W</th>
+                <th style="width:80px;">H</th>
+                <th style="width:90px;">UOM dim.</th>
+                <th style="width:90px;">Peso unit.</th>
+                <th style="width:90px;">UOM peso</th>
+                <th style="width:70px;">Qtà</th>
+                <th style="width:44px;"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr ng-repeat="row in rows track by row._id">
+                <td><input class="tbl-input" type="text" ng-model="row.item" placeholder="P-001" /></td>
+                <td><input class="tbl-input" type="text" ng-model="row.description" placeholder="Pallet europeo" /></td>
+                <td><input class="tbl-input" type="number" min="0" ng-model="row.length" placeholder="0" /></td>
+                <td><input class="tbl-input" type="number" min="0" ng-model="row.width"  placeholder="0" /></td>
+                <td><input class="tbl-input" type="number" min="0" ng-model="row.height" placeholder="0" /></td>
+                <td>
+                  <select class="tbl-input" ng-model="row.dimUom">
+                    <option value="cm">cm</option>
+                    <option value="m">m</option>
+                    <option value="mm">mm</option>
+                    <option value="in">in</option>
+                  </select>
+                </td>
+                <td><input class="tbl-input" type="number" min="0" ng-model="row.weight" placeholder="0" /></td>
+                <td>
+                  <select class="tbl-input" ng-model="row.weightUom">
+                    <option value="kg">kg</option>
+                    <option value="lbs">lbs</option>
+                  </select>
+                </td>
+                <td><input class="tbl-input" type="number" min="1" ng-model="row.qty" placeholder="1" /></td>
+                <td>
+                  <button class="btn-del" ng-click="removeRow($index)" title="Elimina riga" ng-disabled="rows.length === 1">✕</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="actions">
+          <button class="btn btn-outline" ng-click="addRow()">➕ Aggiungi riga</button>
+          <button class="btn btn-success" ng-click="calcola()">⚙️ Calcola ottimizzazione</button>
+          <button class="btn btn-outline" ng-click="resetAll()">🔄 Reset</button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Step 3 – Results -->
+    <div ng-if="risultati">
+
+      <div class="panel">
+        <div class="panel-header">📊 3. Riepilogo</div>
+        <div class="panel-body">
+
+          <div class="results-grid">
+            <div class="stat-card">
+              <div class="stat-value">{{ risultati.numContainers }}</div>
+              <div class="stat-label">Container {{ selectedContainer.name }} necessari</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value">{{ risultati.totalPallets }}</div>
+              <div class="stat-label">Colli / pallet totali</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value">{{ risultati.totalVolume | number:3 }} m³</div>
+              <div class="stat-label">Volume totale carico</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value">{{ risultati.totalWeight | number:1 }} kg</div>
+              <div class="stat-label">Peso totale carico</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Per-container detail -->
+      <div class="panel">
+        <div class="panel-header">🗂️ 4. Dettaglio per container</div>
+        <div class="panel-body">
+          <div class="cont-result-grid">
+            <div class="cont-result-card" ng-repeat="cont in risultati.containers">
+              <div class="cont-result-header">
+                <span class="cont-name">{{ selectedContainer.name }}</span>
+                <span class="cont-num">Container #{{ $index + 1 }}</span>
+              </div>
+
+              <!-- Utilization bars -->
+              <div class="util-bars">
+                <div class="util-row">
+                  <div class="util-label">Volume</div>
+                  <div class="util-bar-wrap">
+                    <div class="util-bar-fill vol"
+                         ng-class="{danger: cont.volPct > 95}"
+                         style="width: {{ cont.volPct | number:0 }}%"></div>
+                  </div>
+                  <div class="util-pct">{{ cont.volPct | number:1 }}%</div>
+                </div>
+                <div class="util-row">
+                  <div class="util-label">Peso</div>
+                  <div class="util-bar-wrap">
+                    <div class="util-bar-fill wgt"
+                         ng-class="{danger: cont.wgtPct > 95}"
+                         style="width: {{ cont.wgtPct | number:0 }}%"></div>
+                  </div>
+                  <div class="util-pct">{{ cont.wgtPct | number:1 }}%</div>
+                </div>
+                <div style="font-size:.77rem; color:#64748b; margin-top:6px;">
+                  Vol. usato: <strong>{{ cont.usedVolume | number:3 }} m³</strong> /
+                  {{ selectedContainer.volume_cbm }} m³ &nbsp;|&nbsp;
+                  Peso usato: <strong>{{ cont.usedWeight | number:1 }} kg</strong> /
+                  {{ selectedContainer.max_payload_kg | number:0 }} kg
+                </div>
+              </div>
+
+              <!-- Pallet list -->
+              <div class="pallet-list">
+                <div class="pallet-list-title">Colli assegnati ({{ cont.pallets.length }})</div>
+                <div class="table-wrapper">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Item</th>
+                        <th>Descrizione</th>
+                        <th style="text-align:right;">Vol. (m³)</th>
+                        <th style="text-align:right;">Peso (kg)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr ng-repeat="p in cont.pallets">
+                        <td>{{ p.item }}</td>
+                        <td>{{ p.description }}</td>
+                        <td style="text-align:right;">{{ p.volume_m3 | number:4 }}</td>
+                        <td style="text-align:right;">{{ p.weight_kg | number:2 }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /risultati -->
+
+  </div><!-- /main -->
+
+  <script>
+  (function () {
+    'use strict';
+
+    /* ── Constants ── */
+    var ITEM_ID_PADDING    = 3;
+    var MAX_PERCENT        = 100;
+    var FALLBACK_CONTAINERS = [
+      { id: '20ST', name: "20' Standard",  volume_cbm: 33.2, max_payload_kg: 21770, description: 'Container standard da 20 piedi.' },
+      { id: '40ST', name: "40' Standard",  volume_cbm: 67.0, max_payload_kg: 26500, description: 'Container standard da 40 piedi.' },
+      { id: '40HC', name: "40' High Cube", volume_cbm: 76.0, max_payload_kg: 28500, description: 'Container da 40 piedi High Cube.' }
+    ];
+
+    /* ── Unit conversion helpers ── */
+    function dimToMeters(value, uom) {
+      switch (uom) {
+        case 'm':  return value;
+        case 'cm': return value / 100;
+        case 'mm': return value / 1000;
+        case 'in': return value * 0.0254;
+        default:   return value;
+      }
+    }
+
+    function weightToKg(value, uom) {
+      return uom === 'lbs' ? value * 0.453592 : value;
+    }
+
+    /* ── Angular module ── */
+    angular.module('containerApp', [])
+      .controller('ContainerController', ['$scope', '$http', function ($scope, $http) {
+
+        var _uid = 0;
+        function uid() { return ++_uid; }
+
+        /* State */
+        $scope.loading        = true;
+        $scope.loadError      = false;
+        $scope.containerTypes = [];
+        $scope.selectedContainer = null;
+        $scope.rows           = [];
+        $scope.risultati      = null;
+        $scope.formError      = '';
+
+        /* Load container types */
+        $http.get('containers.json')
+          .then(function (resp) {
+            $scope.containerTypes = resp.data;
+          })
+          .catch(function () {
+            $scope.loadError      = true;
+            $scope.containerTypes = FALLBACK_CONTAINERS;
+          })
+          .finally(function () {
+            $scope.loading           = false;
+            $scope.selectedContainer = $scope.containerTypes[0] || null;
+            $scope.rows              = [createRow()];
+          });
+
+        /* Container selection */
+        $scope.selectContainer = function (ct) {
+          $scope.selectedContainer = ct;
+          $scope.risultati         = null;
+        };
+
+        /* Row management */
+        function createRow() {
+          return {
+            _id: uid(), item: '', description: '',
+            length: null, width: null, height: null, dimUom: 'cm',
+            weight: null, weightUom: 'kg', qty: 1
+          };
+        }
+
+        $scope.addRow = function () {
+          $scope.rows.push(createRow());
+          $scope.risultati = null;
+        };
+
+        $scope.removeRow = function (idx) {
+          if ($scope.rows.length > 1) {
+            $scope.rows.splice(idx, 1);
+            $scope.risultati = null;
           }
         };
+
+        $scope.resetAll = function () {
+          $scope.rows      = [createRow()];
+          $scope.risultati = null;
+          $scope.formError = '';
+        };
+
+        /* ── Main calculation ── */
+        $scope.calcola = function () {
+          $scope.formError = '';
+          $scope.risultati = null;
+
+          if (!$scope.selectedContainer) {
+            $scope.formError = 'Seleziona un tipo di container.';
+            return;
+          }
+
+          /* Validate & expand rows into individual pallet units */
+          var pallets = [];
+          var valid   = true;
+
+          for (var i = 0; i < $scope.rows.length; i++) {
+            var r = $scope.rows[i];
+            var l = parseFloat(r.length);
+            var w = parseFloat(r.width);
+            var h = parseFloat(r.height);
+            var wt = parseFloat(r.weight);
+            var qty = parseInt(r.qty, 10);
+
+            if (isNaN(l) || l <= 0 || isNaN(w) || w <= 0 || isNaN(h) || h <= 0) {
+              $scope.formError = 'Riga ' + (i + 1) + ': inserisci dimensioni (L, W, H) valide e positive.';
+              valid = false; break;
+            }
+            if (isNaN(wt) || wt < 0) {
+              $scope.formError = 'Riga ' + (i + 1) + ': inserisci un peso valido (>= 0).';
+              valid = false; break;
+            }
+            if (isNaN(qty) || qty < 1) {
+              $scope.formError = 'Riga ' + (i + 1) + ': la quantità deve essere >= 1.';
+              valid = false; break;
+            }
+
+            var lm = dimToMeters(l, r.dimUom);
+            var wm = dimToMeters(w, r.dimUom);
+            var hm = dimToMeters(h, r.dimUom);
+            var vol = lm * wm * hm;
+            var kg  = weightToKg(wt, r.weightUom);
+
+            var item = r.item || ('P-' + String(i + 1).padStart(ITEM_ID_PADDING, '0'));
+            var desc = r.description || '—';
+
+            for (var q = 0; q < qty; q++) {
+              pallets.push({ item: item, description: desc, volume_m3: vol, weight_kg: kg });
+            }
+          }
+
+          if (!valid) return;
+
+          if (pallets.length === 0) {
+            $scope.formError = 'Nessun collo da elaborare. Controlla le righe inserite.';
+            return;
+          }
+
+          var ct = $scope.selectedContainer;
+
+          /* Check single-unit feasibility */
+          for (var pi = 0; pi < pallets.length; pi++) {
+            var p = pallets[pi];
+            if (p.volume_m3 > ct.volume_cbm) {
+              $scope.formError = 'Il collo "' + p.item + '" ha volume (' +
+                p.volume_m3.toFixed(4) + ' m³) superiore alla capacità del container (' +
+                ct.volume_cbm + ' m³). Riduci le dimensioni o scegli un container diverso.';
+              return;
+            }
+            if (p.weight_kg > ct.max_payload_kg) {
+              $scope.formError = 'Il collo "' + p.item + '" ha peso (' +
+                p.weight_kg.toFixed(2) + ' kg) superiore al payload del container (' +
+                ct.max_payload_kg + ' kg). Riduci il peso o scegli un container diverso.';
+              return;
+            }
+          }
+
+          /* First-Fit Decreasing by volume */
+          pallets.sort(function (a, b) { return b.volume_m3 - a.volume_m3; });
+
+          var bins = []; // each bin: { usedVolume, usedWeight, pallets[] }
+
+          function newBin() {
+            return { usedVolume: 0, usedWeight: 0, pallets: [] };
+          }
+
+          for (var pi2 = 0; pi2 < pallets.length; pi2++) {
+            var pallet = pallets[pi2];
+            var placed = false;
+
+            for (var bi = 0; bi < bins.length; bi++) {
+              var bin = bins[bi];
+              if (bin.usedVolume + pallet.volume_m3 <= ct.volume_cbm &&
+                  bin.usedWeight + pallet.weight_kg <= ct.max_payload_kg) {
+                bin.usedVolume += pallet.volume_m3;
+                bin.usedWeight += pallet.weight_kg;
+                bin.pallets.push(pallet);
+                placed = true;
+                break;
+              }
+            }
+
+            if (!placed) {
+              var nb = newBin();
+              nb.usedVolume += pallet.volume_m3;
+              nb.usedWeight += pallet.weight_kg;
+              nb.pallets.push(pallet);
+              bins.push(nb);
+            }
+          }
+
+          /* Build result containers with percentages */
+          var resultContainers = bins.map(function (bin) {
+            return {
+              pallets:    bin.pallets,
+              usedVolume: bin.usedVolume,
+              usedWeight: bin.usedWeight,
+              volPct: Math.min((bin.usedVolume / ct.volume_cbm)     * MAX_PERCENT, MAX_PERCENT),
+              wgtPct: Math.min((bin.usedWeight / ct.max_payload_kg)  * MAX_PERCENT, MAX_PERCENT)
+            };
+          });
+
+          var totalVol = pallets.reduce(function (s, p) { return s + p.volume_m3;  }, 0);
+          var totalWgt = pallets.reduce(function (s, p) { return s + p.weight_kg; }, 0);
+
+          $scope.risultati = {
+            numContainers: bins.length,
+            totalPallets:  pallets.length,
+            totalVolume:   totalVol,
+            totalWeight:   totalWgt,
+            containers:    resultContainers
+          };
+        };
+
       }]);
+
+  }());
   </script>
 </body>
 </html>

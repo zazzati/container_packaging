@@ -60,6 +60,18 @@
       $scope.selectContainer = function (ct) {
         $scope.selectedContainer = ct;
         $scope.risultati         = null;
+
+        /* Ricalcolo automatico se ci sono dati già inseriti */
+        var hasData = $scope.rows.some(function (r) {
+          var l = parseFloat(r.length);
+          var w = parseFloat(r.width);
+          var h = parseFloat(r.height);
+          return !isNaN(l) && l > 0 && !isNaN(w) && w > 0 && !isNaN(h) && h > 0;
+        });
+
+        if (hasData) {
+          $scope.calcola();
+        }
       };
 
       /* Row management */

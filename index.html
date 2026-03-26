@@ -64,6 +64,28 @@
       <div class="panel-header">📋 2. Inserisci i dati dei colli / pallet</div>
       <div class="panel-body">
 
+        <!-- Algorithm selector -->
+        <div class="algo-bar">
+          <span class="algo-bar-label">⚙️ Algoritmo di ottimizzazione:</span>
+          <div class="algo-options">
+            <label class="algo-opt" ng-class="{'algo-opt-active': packingAlgo === 'maxrects'}">
+              <input type="radio" ng-model="packingAlgo" value="maxrects" />
+              <span class="algo-opt-name">MaxRects BSSF</span>
+              <span class="algo-opt-desc">Massima densità — rotazione 90°</span>
+            </label>
+            <label class="algo-opt" ng-class="{'algo-opt-active': packingAlgo === 'skyline'}">
+              <input type="radio" ng-model="packingAlgo" value="skyline" />
+              <span class="algo-opt-name">Skyline BL</span>
+              <span class="algo-opt-desc">Profilo continuo — layout compatto</span>
+            </label>
+            <label class="algo-opt" ng-class="{'algo-opt-active': packingAlgo === 'shelf'}">
+              <input type="radio" ng-model="packingAlgo" value="shelf" />
+              <span class="algo-opt-name">Shelf / Strip</span>
+              <span class="algo-opt-desc">Strisce ordinate — carico semplificato</span>
+            </label>
+          </div>
+        </div>
+
         <div class="error-banner" ng-if="formError">{{ formError }}</div>
 
         <div class="table-wrapper">
@@ -145,6 +167,10 @@
             <div class="stat-card" ng-if="risultati.hasWeight">
               <div class="stat-value">{{ risultati.totalWeight | number:1 }} kg</div>
               <div class="stat-label">Peso totale carico</div>
+            </div>
+            <div class="stat-card stat-card-algo">
+              <div class="stat-value">{{ risultati.algoLabel }}</div>
+              <div class="stat-label">Algoritmo usato</div>
             </div>
           </div>
 

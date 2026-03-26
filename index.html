@@ -64,6 +64,16 @@
       <div class="panel-header">📋 2. Inserisci i dati dei colli / pallet</div>
       <div class="panel-body">
 
+        <!-- Gap / tolerance input -->
+        <div class="gap-bar">
+          <span class="gap-bar-icon">📐</span>
+          <label class="gap-label" for="gapInput">Tolleranza / spazio di sicurezza:</label>
+          <input class="tbl-input gap-input" id="gapInput" type="number" min="0" max="200" step="1"
+                 ng-model="gapCm" ng-change="risultati = null" />
+          <span class="gap-unit">cm</span>
+          <span class="gap-hint">— spazio minimo fra ogni collo e fra collo e parete del container</span>
+        </div>
+
         <div class="error-banner" ng-if="formError">{{ formError }}</div>
 
         <div class="table-wrapper">

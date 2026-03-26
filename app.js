@@ -89,6 +89,10 @@
         $scope.formError = '';
       };
 
+      $scope.fmtWeight = function (kg) {
+        return kg !== null ? kg.toFixed(2) : '—';
+      };
+
       /* ── Main calculation ── */
       $scope.calcola = function () {
         $scope.formError = '';
@@ -115,8 +119,9 @@
             $scope.formError = 'Riga ' + (i + 1) + ': inserisci dimensioni (L, W, H) valide e positive.';
             valid = false; break;
           }
-          if (isNaN(wt) || wt < 0) {
-            $scope.formError = 'Riga ' + (i + 1) + ': inserisci un peso valido (>= 0).';
+          var hasWt = (r.weight !== null && r.weight !== '' && !isNaN(wt));
+          if (hasWt && wt < 0) {
+            $scope.formError = 'Riga ' + (i + 1) + ': il peso, se inserito, deve essere >= 0.';
             valid = false; break;
           }
           if (isNaN(qty) || qty < 1) {
@@ -128,7 +133,7 @@
           var wm = dimToMeters(w, r.dimUom);
           var hm = dimToMeters(h, r.dimUom);
           var vol = lm * wm * hm;
-          var kg  = weightToKg(wt, r.weightUom);
+          var kg  = hasWt ? weightToKg(wt, r.weightUom) : null;
 
           var item = r.item || ('P-' + String(i + 1).padStart(ITEM_ID_PADDING, '0'));
           var desc = r.description || '—';
@@ -156,7 +161,7 @@
               ct.volume_cbm + ' m³). Riduci le dimensioni o scegli un container diverso.';
             return;
           }
-          if (p.weight_kg > ct.max_payload_kg) {
+          if (p.weight_kg !== null && p.weight_kg > ct.max_payload_kg) {
             $scope.formError = 'Il collo "' + p.item + '" ha peso (' +
               p.weight_kg.toFixed(2) + ' kg) superiore al payload del container (' +
               ct.max_payload_kg + ' kg). Riduci il peso o scegli un container diverso.';
@@ -179,10 +184,11 @@
 
           for (var bi = 0; bi < bins.length; bi++) {
             var bin = bins[bi];
-            if (bin.usedVolume + pallet.volume_m3 <= ct.volume_cbm &&
-                bin.usedWeight + pallet.weight_kg <= ct.max_payload_kg) {
+            var weightOk = (pallet.weight_kg === null) ||
+                           (bin.usedWeight + pallet.weight_kg <= ct.max_payload_kg);
+            if (bin.usedVolume + pallet.volume_m3 <= ct.volume_cbm && weightOk) {
               bin.usedVolume += pallet.volume_m3;
-              bin.usedWeight += pallet.weight_kg;
+              bin.usedWeight += (pallet.weight_kg !== null ? pallet.weight_kg : 0);
               bin.pallets.push(pallet);
               placed = true;
               break;
@@ -192,31 +198,34 @@
           if (!placed) {
             var nb = newBin();
             nb.usedVolume += pallet.volume_m3;
-            nb.usedWeight += pallet.weight_kg;
+            nb.usedWeight += (pallet.weight_kg !== null ? pallet.weight_kg : 0);
             nb.pallets.push(pallet);
             bins.push(nb);
           }
         }
 
         /* Build result containers with percentages */
+        var hasWeight = pallets.some(function (p) { return p.weight_kg !== null; });
+
         var resultContainers = bins.map(function (bin) {
           return {
             pallets:    bin.pallets,
             usedVolume: bin.usedVolume,
             usedWeight: bin.usedWeight,
             volPct: Math.min((bin.usedVolume / ct.volume_cbm)     * MAX_PERCENT, MAX_PERCENT),
-            wgtPct: Math.min((bin.usedWeight / ct.max_payload_kg)  * MAX_PERCENT, MAX_PERCENT)
+            wgtPct: hasWeight ? Math.min((bin.usedWeight / ct.max_payload_kg) * MAX_PERCENT, MAX_PERCENT) : 0
           };
         });
 
         var totalVol = pallets.reduce(function (s, p) { return s + p.volume_m3;  }, 0);
-        var totalWgt = pallets.reduce(function (s, p) { return s + p.weight_kg; }, 0);
+        var totalWgt = pallets.reduce(function (s, p) { return s + (p.weight_kg !== null ? p.weight_kg : 0); }, 0);
 
         $scope.risultati = {
           numContainers: bins.length,
           totalPallets:  pallets.length,
           totalVolume:   totalVol,
           totalWeight:   totalWgt,
+          hasWeight:     hasWeight,
           containers:    resultContainers
         };
       };

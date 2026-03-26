@@ -89,7 +89,7 @@
                     <option value="in">in</option>
                   </select>
                 </td>
-                <td><input class="tbl-input" type="number" min="0" ng-model="row.weight" placeholder="0" /></td>
+                <td><input class="tbl-input" type="number" min="0" ng-model="row.weight" placeholder="—" /></td>
                 <td>
                   <select class="tbl-input" ng-model="row.weightUom">
                     <option value="kg">kg</option>
@@ -134,7 +134,7 @@
               <div class="stat-value">{{ risultati.totalVolume | number:3 }} m³</div>
               <div class="stat-label">Volume totale carico</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card" ng-if="risultati.hasWeight">
               <div class="stat-value">{{ risultati.totalWeight | number:1 }} kg</div>
               <div class="stat-label">Peso totale carico</div>
             </div>
@@ -165,7 +165,7 @@
                   </div>
                   <div class="util-pct">{{ cont.volPct | number:1 }}%</div>
                 </div>
-                <div class="util-row">
+                <div class="util-row" ng-if="risultati.hasWeight">
                   <div class="util-label">Peso</div>
                   <div class="util-bar-wrap">
                     <div class="util-bar-fill wgt"
@@ -176,9 +176,12 @@
                 </div>
                 <div style="font-size:.77rem; color:#64748b; margin-top:6px;">
                   Vol. usato: <strong>{{ cont.usedVolume | number:3 }} m³</strong> /
-                  {{ selectedContainer.volume_cbm }} m³ &nbsp;|&nbsp;
-                  Peso usato: <strong>{{ cont.usedWeight | number:1 }} kg</strong> /
-                  {{ selectedContainer.max_payload_kg | number:0 }} kg
+                  {{ selectedContainer.volume_cbm }} m³
+                  <span ng-if="risultati.hasWeight">
+                    &nbsp;|&nbsp;
+                    Peso usato: <strong>{{ cont.usedWeight | number:1 }} kg</strong> /
+                    {{ selectedContainer.max_payload_kg | number:0 }} kg
+                  </span>
                 </div>
               </div>
 
@@ -200,7 +203,7 @@
                         <td>{{ p.item }}</td>
                         <td>{{ p.description }}</td>
                         <td style="text-align:right;">{{ p.volume_m3 | number:4 }}</td>
-                        <td style="text-align:right;">{{ p.weight_kg | number:2 }}</td>
+                        <td style="text-align:right;">{{ fmtWeight(p.weight_kg) }}</td>
                       </tr>
                     </tbody>
                   </table>

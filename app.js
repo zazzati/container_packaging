@@ -103,6 +103,183 @@
            outer.y + outer.h >= inner.y + inner.h;
   };
 
+  /* ═══════════════════════════════════════════════════════════════════════════
+     ALGORITHM 2 — Skyline Bottom-Left with Minimum Waste  (Skyline BL)
+     ═══════════════════════════════════════════════════════════════════════════
+     Maintains a "skyline" — a partition of [0, binW] into horizontal segments
+     {x, y, w} where y is how far up the bin is used at that x range.
+     Initially the full floor is free: [{x:0, y:0, w:binW}].
+
+     To place a rectangle (rw × rh):
+       Scan each segment as a candidate start-x.  Compute maxY = the highest y
+       under the rectangle footprint (max of all segments in [x, x+rw]).
+       Accept if maxY + rh ≤ binH.  Pick the candidate with the lowest maxY;
+       ties broken by minimum wasted area below the placed rectangle.
+       Supports 90° rotation.
+
+     After placement the segment(s) covered by the item are replaced by one
+     new segment at height y + rh, and adjacent equal-height segments merged.
+  ─────────────────────────────────────────────────────────────────────────── */
+  function SkylinePacker(binW, binH) {
+    this.binW = binW;
+    this.binH = binH;
+    this.sky  = [{ x: 0, y: 0, w: binW }];
+  }
+
+  /* Returns {idx, x, y, waste} for the best placement of (rw × rh), or null */
+  SkylinePacker.prototype._best = function (rw, rh) {
+    var EPS = 1e-9;
+    var bestY = Infinity, bestWaste = Infinity, bestX = -1, bestIdx = -1;
+    for (var i = 0; i < this.sky.length; i++) {
+      var res = this._fit(i, rw, rh);
+      if (!res) continue;
+      if (res.y < bestY - EPS ||
+          (Math.abs(res.y - bestY) < EPS && res.waste < bestWaste - EPS)) {
+        bestY     = res.y;
+        bestWaste = res.waste;
+        bestX     = this.sky[i].x;
+        bestIdx   = i;
+      }
+    }
+    if (bestIdx === -1) return null;
+    return { idx: bestIdx, x: bestX, y: bestY, waste: bestWaste };
+  };
+
+  /* Check if (rw × rh) can be placed starting at this.sky[idx].x.
+     Returns {y: maxY, waste} on success, null if it doesn't fit. */
+  SkylinePacker.prototype._fit = function (idx, rw, rh) {
+    var EPS = 1e-9;
+    var x = this.sky[idx].x;
+    if (x + rw > this.binW + EPS) return null;
+    var maxY = 0, remaining = rw, i = idx;
+    while (remaining > EPS) {
+      if (i >= this.sky.length) return null;
+      if (this.sky[i].y > maxY) maxY = this.sky[i].y;
+      remaining -= this.sky[i].w;
+      i++;
+    }
+    if (maxY + rh > this.binH + EPS) return null;
+    var waste = 0;
+    remaining = rw; i = idx;
+    while (remaining > EPS) {
+      var take = Math.min(remaining, this.sky[i].w);
+      waste    += (maxY - this.sky[i].y) * take;
+      remaining -= take;
+      i++;
+    }
+    return { y: maxY, waste: waste };
+  };
+
+  /* Update skyline after placing (w × h) at (x, y) — segment started at idx */
+  SkylinePacker.prototype._place = function (idx, x, y, w, h) {
+    var EPS = 1e-9;
+    var remaining = w;
+    var i = idx;
+    while (remaining > EPS && i < this.sky.length) {
+      if (this.sky[i].w <= remaining + EPS) {
+        remaining -= this.sky[i].w;
+        this.sky.splice(i, 1);
+      } else {
+        this.sky[i].x += remaining;
+        this.sky[i].w -= remaining;
+        remaining = 0;
+      }
+    }
+    this.sky.splice(idx, 0, { x: x, y: y + h, w: w });
+    /* Merge adjacent segments with equal height */
+    for (var j = 0; j < this.sky.length - 1; ) {
+      if (Math.abs(this.sky[j].y - this.sky[j + 1].y) < EPS) {
+        this.sky[j].w += this.sky[j + 1].w;
+        this.sky.splice(j + 1, 1);
+      } else { j++; }
+    }
+  };
+
+  SkylinePacker.prototype.insert = function (rw, rh, allowRotation) {
+    var EPS   = 1e-9;
+    var best  = this._best(rw, rh);
+    var bestR = allowRotation ? this._best(rh, rw) : null;
+    if (!best && !bestR) return null;
+    var useRot = false;
+    if (!best) {
+      useRot = true;
+    } else if (bestR) {
+      if (bestR.y < best.y - EPS ||
+          (Math.abs(bestR.y - best.y) < EPS && bestR.waste < best.waste - EPS)) {
+        useRot = true;
+      }
+    }
+    var chosen = useRot ? bestR : best;
+    var w = useRot ? rh : rw;
+    var h = useRot ? rw : rh;
+    var rx = chosen.x;  /* capture before _place modifies skyline */
+    var ry = chosen.y;
+    this._place(chosen.idx, rx, ry, w, h);
+    return { x: rx, y: ry, w: w, h: h, rotated: useRot };
+  };
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     ALGORITHM 3 — Shelf / Strip Packing
+     ═══════════════════════════════════════════════════════════════════════════
+     Divides the bin into horizontal shelves (strips).  The first item on a new
+     shelf sets that shelf's height; subsequent items fit if their height is ≤
+     the shelf height and horizontal space remains.  Items can be placed rotated
+     to minimise the shelf height and thus waste fewer vertical strips.
+
+     Pre-sort recommendation: short-side descending (items needing taller shelves
+     go first, reducing the chance of tall items opening many small shelves).
+  ─────────────────────────────────────────────────────────────────────────── */
+  function ShelfPacker(binW, binH) {
+    this.binW    = binW;
+    this.binH    = binH;
+    this.shelves = [];  /* [{y, height, usedW}] */
+    this.topY    = 0;
+  }
+
+  ShelfPacker.prototype.insert = function (rw, rh, allowRotation) {
+    /* 1. Try to fit in an existing shelf */
+    var res = this._tryExisting(rw, rh, false);
+    if (res) return res;
+    if (allowRotation) {
+      res = this._tryExisting(rh, rw, true);
+      if (res) return res;
+    }
+    /* 2. Open a new shelf — prefer the orientation with smaller height */
+    if (allowRotation) {
+      var EPS  = 1e-9;
+      var canN = (rw <= this.binW + EPS && this.topY + rh <= this.binH + EPS);
+      var canR = (rh <= this.binW + EPS && this.topY + rw <= this.binH + EPS);
+      if (!canN && !canR) return null;
+      /* Pick orientation that wastes less vertical space (smaller shelf height) */
+      if (canN && (!canR || rh <= rw)) return this._newShelf(rw, rh, false);
+      return this._newShelf(rh, rw, true);
+    }
+    return this._newShelf(rw, rh, false);
+  };
+
+  ShelfPacker.prototype._tryExisting = function (w, h, rotated) {
+    var EPS = 1e-9;
+    for (var i = 0; i < this.shelves.length; i++) {
+      var s = this.shelves[i];
+      if (h <= s.height + EPS && s.usedW + w <= this.binW + EPS) {
+        var res = { x: s.usedW, y: s.y, w: w, h: h, rotated: rotated };
+        s.usedW += w;
+        return res;
+      }
+    }
+    return null;
+  };
+
+  ShelfPacker.prototype._newShelf = function (w, h, rotated) {
+    var EPS = 1e-9;
+    if (w > this.binW + EPS)             return null;
+    if (this.topY + h > this.binH + EPS) return null;
+    var res = { x: 0, y: this.topY, w: w, h: h, rotated: rotated };
+    this.shelves.push({ y: this.topY, height: h, usedW: w });
+    this.topY += h;
+    return res;
+  };
+
   /* ── IndexedDB Session Persistence ──────────────────────────────────────────
      Persists the user's row data and selected container across page reloads.
      Uses IndexedDB (structured-clone safe, no size limits).
@@ -306,6 +483,7 @@
       $scope.rows              = [];
       $scope.risultati         = null;
       $scope.formError         = '';
+      $scope.packingAlgo       = 'maxrects'; /* 'maxrects' | 'skyline' | 'shelf' */
 
       /* Load container types */
       $http.get('containers.json')
@@ -344,6 +522,11 @@
                 $scope.sessionRestored = true;
               } else {
                 $scope.rows = [createRow()];
+              }
+
+              /* Restore packing algorithm */
+              if (saved && saved.packingAlgo) {
+                $scope.packingAlgo = saved.packingAlgo;
               }
 
               /* Begin auto-save watches only AFTER restore completes */
@@ -404,6 +587,7 @@
         $scope.risultati         = null;
         $scope.formError         = '';
         $scope.sessionRestored   = false;
+        $scope.packingAlgo       = 'maxrects';
         if ($scope.containerTypes.length > 0) {
           $scope.selectedContainer = $scope.containerTypes[0];
         }
@@ -427,7 +611,8 @@
         if (!$scope.selectedContainer) return;
         dbSave({
           selectedContainerId: $scope.selectedContainer.id,
-          rows: _rowsSnapshot($scope.rows)
+          rows:        _rowsSnapshot($scope.rows),
+          packingAlgo: $scope.packingAlgo
         });
       }
 
@@ -441,6 +626,18 @@
         _initialized = true;
         $scope.$watch('rows', _scheduleSave, true);
         $scope.$watch('selectedContainer', _scheduleSave);
+        /* packingAlgo: persist + auto-recalculate when user switches algorithm */
+        $scope.$watch('packingAlgo', function (newVal, oldVal) {
+          _scheduleSave();
+          if (newVal === oldVal) return;
+          $scope.risultati = null;
+          var hasData = $scope.rows.some(function (r) {
+            return parseFloat(r.length) > 0 &&
+                   parseFloat(r.width)  > 0 &&
+                   parseFloat(r.height) > 0;
+          });
+          if (hasData) { $scope.calcola(); }
+        });
       }
 
       $scope.fmtWeight = function (kg) {
@@ -528,18 +725,32 @@
           }
         }
 
-        /* ── MAXRECTS 2-D Floor Packing — Best Fit Decreasing by footprint area ── */
-        pallets.sort(function (a, b) { return (b.length_m * b.width_m) - (a.length_m * a.width_m); });
+        /* ── Packing dispatch ─────────────────────────────────────────────────
+           Sort strategy and packer class depend on the chosen algorithm.
+           All three packers share the same insert(w, h, allowRotation) API
+           and never stack items (pure 2-D floor placement).
+        ─────────────────────────────────────────────────────────────────────── */
+        var algo = $scope.packingAlgo || 'maxrects';
+
+        if (algo === 'shelf') {
+          /* Shelf: sort by short-side descending so items that force taller
+             shelf rows come first, minimising wasted vertical strips. */
+          pallets.sort(function (a, b) {
+            return Math.min(b.length_m, b.width_m) - Math.min(a.length_m, a.width_m);
+          });
+        } else {
+          /* MaxRects & Skyline: Best-Fit Decreasing by footprint area */
+          pallets.sort(function (a, b) { return (b.length_m * b.width_m) - (a.length_m * a.width_m); });
+        }
 
         var bins = [];
 
         function newBin() {
-          return {
-            maxrects:   new MaxRects(ct.inner_length_m, ct.inner_width_m),
-            usedVolume: 0,
-            usedWeight: 0,
-            placements: []
-          };
+          var packer;
+          if      (algo === 'skyline') packer = new SkylinePacker(ct.inner_length_m, ct.inner_width_m);
+          else if (algo === 'shelf')   packer = new ShelfPacker(ct.inner_length_m, ct.inner_width_m);
+          else                         packer = new MaxRects(ct.inner_length_m, ct.inner_width_m);
+          return { packer: packer, usedVolume: 0, usedWeight: 0, placements: [] };
         }
 
         for (var pi2 = 0; pi2 < pallets.length; pi2++) {
@@ -552,7 +763,7 @@
                            (bin.usedWeight + pallet.weight_kg <= ct.max_payload_kg);
             if (!weightOk) continue;
 
-            var pos = bin.maxrects.insert(pallet.length_m, pallet.width_m, true);
+            var pos = bin.packer.insert(pallet.length_m, pallet.width_m, true);
             if (pos) {
               bin.usedVolume += pallet.volume_m3;
               bin.usedWeight += (pallet.weight_kg !== null ? pallet.weight_kg : 0);
@@ -569,7 +780,7 @@
 
           if (!placed) {
             var nb = newBin();
-            var pos2 = nb.maxrects.insert(pallet.length_m, pallet.width_m, true);
+            var pos2 = nb.packer.insert(pallet.length_m, pallet.width_m, true);
             nb.usedVolume += pallet.volume_m3;
             nb.usedWeight += (pallet.weight_kg !== null ? pallet.weight_kg : 0);
             nb.placements.push({
@@ -585,11 +796,12 @@
         /* Build result containers with percentages and floor plan data */
         var hasWeight = pallets.some(function (p) { return p.weight_kg !== null; });
         var floorArea = ct.inner_length_m * ct.inner_width_m;
+        var ALGO_LABELS = { maxrects: 'MaxRects BSSF', skyline: 'Skyline BL', shelf: 'Shelf / Strip' };
 
         var resultContainers = bins.map(function (bin) {
           var usedFloor = bin.placements.reduce(function (s, p) { return s + p.w * p.h; }, 0);
           return {
-            pallets:    bin.placements,   /* backward compat with pallet table */
+            pallets:    bin.placements,
             placements: bin.placements,
             usedVolume: bin.usedVolume,
             usedWeight: bin.usedWeight,
@@ -610,6 +822,7 @@
           hasWeight:     hasWeight,
           ctLength:      ct.inner_length_m,
           ctWidth:       ct.inner_width_m,
+          algoLabel:     ALGO_LABELS[algo] || algo,
           containers:    resultContainers
         };
       };

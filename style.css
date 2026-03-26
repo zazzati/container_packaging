@@ -157,6 +157,38 @@ select.tbl-input { cursor: pointer; }
   border: 1.5px solid #d1d5db;
 }
 .btn-outline:hover { background: #f9fafb; }
+.btn-danger { background: #dc2626; color: #fff; }
+.btn-danger:hover { background: #b91c1c; }
+
+/* ── Session restored banner ── */
+.session-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+  color: #166534;
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  font-size: .88rem;
+  font-weight: 500;
+}
+.session-banner-icon { font-size: 1.1rem; flex-shrink: 0; }
+.session-banner span:nth-child(2) { flex: 1; }
+.session-banner-close {
+  background: none;
+  border: none;
+  color: #16a34a;
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: background .15s;
+}
+.session-banner-close:hover { background: #dcfce7; }
 
 /* ── Error banner ── */
 .error-banner {

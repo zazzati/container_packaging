@@ -103,6 +103,54 @@
            outer.y + outer.h >= inner.y + inner.h;
   };
 
+  /* ── IndexedDB Session Persistence ──────────────────────────────────────────
+     Persists the user's row data and selected container across page reloads.
+     Uses IndexedDB (structured-clone safe, no size limits).
+     Falls back gracefully if IndexedDB is unavailable (private browsing, etc.).
+  ─────────────────────────────────────────────────────────────────────────── */
+  var DB_NAME    = 'containerAppDB';
+  var DB_VERSION = 1;
+  var STORE_NAME = 'session';
+  var STATE_KEY  = 'appState';
+
+  function openDB(cb) {
+    if (!window.indexedDB) { cb(new Error('IndexedDB not available'), null); return; }
+    var req = window.indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = function (e) { e.target.result.createObjectStore(STORE_NAME); };
+    req.onsuccess       = function (e) { cb(null, e.target.result); };
+    req.onerror         = function (e) { cb(e.target.error, null); };
+  }
+
+  function dbSave(state, done) {
+    openDB(function (err, db) {
+      if (err) { if (done) done(err); return; }
+      var tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).put(state, STATE_KEY);
+      tx.oncomplete = function ()  { if (done) done(null); };
+      tx.onerror    = function (e) { if (done) done(e.target.error); };
+    });
+  }
+
+  function dbLoad(done) {
+    openDB(function (err, db) {
+      if (err) { done(null, null); return; }  /* graceful fallback */
+      var tx  = db.transaction(STORE_NAME, 'readonly');
+      var req = tx.objectStore(STORE_NAME).get(STATE_KEY);
+      req.onsuccess = function (e) { done(null, e.target.result || null); };
+      req.onerror   = function ()  { done(null, null); };
+    });
+  }
+
+  function dbClear(done) {
+    openDB(function (err, db) {
+      if (err) { if (done) done(err); return; }
+      var tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).clear();
+      tx.oncomplete = function ()  { if (done) done(null); };
+      tx.onerror    = function (e) { if (done) done(e.target.error); };
+    });
+  }
+
   /* ── Angular module ── */
   angular.module('containerApp', [])
 
@@ -244,19 +292,20 @@
       };
     }])
 
-    .controller('ContainerController', ['$scope', '$http', function ($scope, $http) {
+    .controller('ContainerController', ['$scope', '$http', '$timeout', function ($scope, $http, $timeout) {
 
       var _uid = 0;
       function uid() { return ++_uid; }
 
       /* State */
-      $scope.loading        = true;
-      $scope.loadError      = false;
-      $scope.containerTypes = [];
+      $scope.loading           = true;
+      $scope.loadError         = false;
+      $scope.sessionRestored   = false;
+      $scope.containerTypes    = [];
       $scope.selectedContainer = null;
-      $scope.rows           = [];
-      $scope.risultati      = null;
-      $scope.formError      = '';
+      $scope.rows              = [];
+      $scope.risultati         = null;
+      $scope.formError         = '';
 
       /* Load container types */
       $http.get('containers.json')
@@ -268,9 +317,39 @@
           $scope.containerTypes = FALLBACK_CONTAINERS;
         })
         .finally(function () {
-          $scope.loading           = false;
-          $scope.selectedContainer = $scope.containerTypes[0] || null;
-          $scope.rows              = [createRow()];
+          $scope.loading = false;
+
+          /* Attempt to restore the last session from IndexedDB */
+          dbLoad(function (err, saved) {
+            $scope.$apply(function () {
+              /* Restore container selection */
+              if (saved && saved.selectedContainerId) {
+                var found = null;
+                for (var ci = 0; ci < $scope.containerTypes.length; ci++) {
+                  if ($scope.containerTypes[ci].id === saved.selectedContainerId) {
+                    found = $scope.containerTypes[ci];
+                    break;
+                  }
+                }
+                $scope.selectedContainer = found || $scope.containerTypes[0] || null;
+              } else {
+                $scope.selectedContainer = $scope.containerTypes[0] || null;
+              }
+
+              /* Restore rows — reassign fresh _id so ng-repeat tracks correctly */
+              if (saved && Array.isArray(saved.rows) && saved.rows.length > 0) {
+                $scope.rows = saved.rows.map(function (r) {
+                  return angular.extend({}, r, { _id: uid() });
+                });
+                $scope.sessionRestored = true;
+              } else {
+                $scope.rows = [createRow()];
+              }
+
+              /* Begin auto-save watches only AFTER restore completes */
+              _startAutoSave();
+            });
+          });
         });
 
       /* Container selection */
@@ -317,6 +396,52 @@
         $scope.risultati = null;
         $scope.formError = '';
       };
+
+      /* Cancella tutto (form + storage) e ricomincia da zero */
+      $scope.clearAll = function () {
+        dbClear();
+        $scope.rows              = [createRow()];
+        $scope.risultati         = null;
+        $scope.formError         = '';
+        $scope.sessionRestored   = false;
+        if ($scope.containerTypes.length > 0) {
+          $scope.selectedContainer = $scope.containerTypes[0];
+        }
+      };
+
+      /* ── Auto-save session (debounced 600 ms) ── */
+      var _initialized = false;
+      var _saveTimer   = null;
+
+      function _rowsSnapshot(rows) {
+        return rows.map(function (r) {
+          return {
+            item: r.item, description: r.description,
+            length: r.length, width: r.width, height: r.height, dimUom: r.dimUom,
+            weight: r.weight, weightUom: r.weightUom, qty: r.qty
+          };
+        });
+      }
+
+      function _persistSession() {
+        if (!$scope.selectedContainer) return;
+        dbSave({
+          selectedContainerId: $scope.selectedContainer.id,
+          rows: _rowsSnapshot($scope.rows)
+        });
+      }
+
+      function _scheduleSave() {
+        if (!_initialized) return;
+        if (_saveTimer) $timeout.cancel(_saveTimer);
+        _saveTimer = $timeout(_persistSession, 600);
+      }
+
+      function _startAutoSave() {
+        _initialized = true;
+        $scope.$watch('rows', _scheduleSave, true);
+        $scope.$watch('selectedContainer', _scheduleSave);
+      }
 
       $scope.fmtWeight = function (kg) {
         return kg !== null ? kg.toFixed(2) : '—';

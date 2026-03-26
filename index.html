@@ -20,6 +20,13 @@
 
   <div class="main">
 
+    <!-- Session restored banner -->
+    <div class="session-banner" ng-if="sessionRestored">
+      <span class="session-banner-icon">💾</span>
+      <span>Sessione precedente ripristinata &mdash; i tuoi dati sono stati recuperati automaticamente.</span>
+      <button class="session-banner-close" ng-click="sessionRestored = false" title="Chiudi">&#x2715;</button>
+    </div>
+
     <!-- Loading indicator -->
     <div class="panel" ng-if="loading">
       <div class="panel-body" style="text-align:center; padding: 40px; color:#64748b;">
@@ -109,7 +116,7 @@
         <div class="actions">
           <button class="btn btn-outline" ng-click="addRow()">➕ Aggiungi riga</button>
           <button class="btn btn-success" ng-click="calcola()">⚙️ Calcola ottimizzazione</button>
-          <button class="btn btn-outline" ng-click="resetAll()">🔄 Reset</button>
+          <button class="btn btn-danger" ng-click="clearAll()" title="Cancella tutti i dati salvati e ricomincia da zero">🗑️ Cancella tutto e ricomincia</button>
         </div>
 
       </div>

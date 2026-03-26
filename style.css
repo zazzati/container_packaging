@@ -160,6 +160,43 @@ select.tbl-input { cursor: pointer; }
 .btn-danger { background: #dc2626; color: #fff; }
 .btn-danger:hover { background: #b91c1c; }
 
+/* ── Gap / tolerance bar ── */
+.gap-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+}
+.gap-bar-icon { font-size: 1rem; flex-shrink: 0; }
+.gap-label {
+  font-size: .86rem;
+  font-weight: 700;
+  color: #1e3a5f;
+  white-space: nowrap;
+}
+.gap-input {
+  width: 72px !important;
+  text-align: right;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.gap-unit {
+  font-size: .86rem;
+  font-weight: 700;
+  color: #475569;
+  flex-shrink: 0;
+}
+.gap-hint {
+  font-size: .78rem;
+  color: #94a3b8;
+  font-style: italic;
+}
+
 /* ── Session restored banner ── */
 .session-banner {
   display: flex;

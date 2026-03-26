@@ -35,19 +35,28 @@
      Best Short Side Fit (BSSF) heuristic with 90° rotation support.
      Reference: Jylänki (2010) "A Thousand Ways to Pack the Bin".
   ─────────────────────────────────────────────────────────────────────────── */
-  function MaxRects(binW, binH) {
+  function MaxRects(binW, binH, gap) {
     this.binW = binW;
     this.binH = binH;
-    this.freeRects = [{ x: 0, y: 0, w: binW, h: binH }];
+    this.gap  = (gap > 0) ? gap : 0;
+    var g = this.gap;
+    this.freeRects = [{ x: g, y: g, w: Math.max(0, binW - 2 * g), h: Math.max(0, binH - 2 * g) }];
     this.usedRects = [];
   }
 
   MaxRects.prototype.insert = function (rw, rh, allowRotation) {
     var EPS = 1e-9;
-    var best = null, bestScore = Infinity, bestRotated = false;
-    var tries = allowRotation ? [[rw, rh, false], [rh, rw, true]] : [[rw, rh, false]];
+    var g   = this.gap;
+    /* Each item is inserted at its padded size (actual + trailing gap), which
+       reserves g space between adjacent items. The returned position/dims are
+       the actual (un-padded) values so the canvas renders correctly. */
+    var tries = allowRotation
+      ? [[rw + g, rh + g, rw, rh, false], [rh + g, rw + g, rh, rw, true]]
+      : [[rw + g, rh + g, rw, rh, false]];
+    var best = null, bestScore = Infinity, bestRotated = false, bestAw = 0, bestAh = 0;
     for (var ti = 0; ti < tries.length; ti++) {
-      var tw = tries[ti][0], th = tries[ti][1], rot = tries[ti][2];
+      var tw = tries[ti][0], th = tries[ti][1];
+      var aw = tries[ti][2], ah = tries[ti][3], rot = tries[ti][4];
       for (var fi = 0; fi < this.freeRects.length; fi++) {
         var fr = this.freeRects[fi];
         if (tw <= fr.w + EPS && th <= fr.h + EPS) {
@@ -56,15 +65,18 @@
             bestScore = score;
             best = { x: fr.x, y: fr.y, w: tw, h: th };
             bestRotated = rot;
+            bestAw = aw; bestAh = ah;
           }
         }
       }
     }
     if (!best) return null;
+    /* Split using the padded rectangle to reserve trailing gap space */
     this.usedRects.push({ x: best.x, y: best.y, w: best.w, h: best.h });
     this._split(best);
     this._prune();
-    return { x: best.x, y: best.y, w: best.w, h: best.h, rotated: bestRotated };
+    /* Return actual (un-padded) dims at the placed position */
+    return { x: best.x, y: best.y, w: bestAw, h: bestAh, rotated: bestRotated };
   };
 
   MaxRects.prototype._split = function (used) {
@@ -306,6 +318,7 @@
       $scope.rows              = [];
       $scope.risultati         = null;
       $scope.formError         = '';
+      $scope.gapCm             = 10;   /* default 10 cm safety tolerance */
 
       /* Load container types */
       $http.get('containers.json')
@@ -344,6 +357,11 @@
                 $scope.sessionRestored = true;
               } else {
                 $scope.rows = [createRow()];
+              }
+
+              /* Restore gap tolerance */
+              if (saved && saved.gapCm != null) {
+                $scope.gapCm = saved.gapCm;
               }
 
               /* Begin auto-save watches only AFTER restore completes */
@@ -404,6 +422,7 @@
         $scope.risultati         = null;
         $scope.formError         = '';
         $scope.sessionRestored   = false;
+        $scope.gapCm             = 10;
         if ($scope.containerTypes.length > 0) {
           $scope.selectedContainer = $scope.containerTypes[0];
         }
@@ -427,7 +446,8 @@
         if (!$scope.selectedContainer) return;
         dbSave({
           selectedContainerId: $scope.selectedContainer.id,
-          rows: _rowsSnapshot($scope.rows)
+          rows: _rowsSnapshot($scope.rows),
+          gapCm: $scope.gapCm
         });
       }
 
@@ -441,6 +461,7 @@
         _initialized = true;
         $scope.$watch('rows', _scheduleSave, true);
         $scope.$watch('selectedContainer', _scheduleSave);
+        $scope.$watch('gapCm', _scheduleSave);
       }
 
       $scope.fmtWeight = function (kg) {
@@ -454,6 +475,21 @@
 
         if (!$scope.selectedContainer) {
           $scope.formError = 'Seleziona un tipo di container.';
+          return;
+        }
+
+        /* Parse and validate gap tolerance */
+        var gapCmRaw = parseFloat($scope.gapCm);
+        var gapM = (!isNaN(gapCmRaw) && gapCmRaw >= 0) ? gapCmRaw / 100 : 0.10;
+
+        var ct = $scope.selectedContainer;
+
+        /* Effective usable dimensions after wall clearance (gap on each wall side) */
+        var effLen = ct.inner_length_m - 2 * gapM;
+        var effWid = ct.inner_width_m  - 2 * gapM;
+
+        if (effLen <= 0 || effWid <= 0) {
+          $scope.formError = 'La tolleranza (' + gapCmRaw.toFixed(0) + ' cm) è troppo grande per le dimensioni interne del container.';
           return;
         }
 
@@ -505,18 +541,18 @@
           return;
         }
 
-        var ct = $scope.selectedContainer;
-
-        /* Check single-unit feasibility (floor footprint + weight) */
+        /* Check single-unit feasibility:
+           Item (+ trailing gap) must fit in the effective area (bin minus wall clearance).
+           Condition: itemDim + gap ≤ effDim  (since insert pads by gap and bin is shrunk by 2×gap) */
         for (var pi = 0; pi < pallets.length; pi++) {
           var p = pallets[pi];
-          var fitsFloor = (p.length_m <= ct.inner_length_m && p.width_m <= ct.inner_width_m) ||
-                          (p.width_m  <= ct.inner_length_m && p.length_m <= ct.inner_width_m);
+          var fitsFloor = (p.length_m + gapM <= effLen && p.width_m + gapM <= effWid) ||
+                          (p.width_m  + gapM <= effLen && p.length_m + gapM <= effWid);
           if (!fitsFloor) {
             $scope.formError = 'Il collo "' + p.item + '" (' +
               p.length_m.toFixed(3) + ' × ' + p.width_m.toFixed(3) +
-              ' m) non entra nella pianta del container (' +
-              ct.inner_length_m.toFixed(3) + ' × ' + ct.inner_width_m.toFixed(3) +
+              ' m) non entra nell\'area utile del container con tolleranza ' + (gapM * 100).toFixed(0) + ' cm (' +
+              effLen.toFixed(3) + ' × ' + effWid.toFixed(3) +
               ' m) nemmeno se ruotato di 90°.';
             return;
           }
@@ -535,7 +571,7 @@
 
         function newBin() {
           return {
-            maxrects:   new MaxRects(ct.inner_length_m, ct.inner_width_m),
+            maxrects:   new MaxRects(ct.inner_length_m, ct.inner_width_m, gapM),
             usedVolume: 0,
             usedWeight: 0,
             placements: []

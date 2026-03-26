@@ -4,6 +4,12 @@
   /* ── Constants ── */
   var ITEM_ID_PADDING    = 3;
   var MAX_PERCENT        = 100;
+  var PALLET_COLORS = [
+    '#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6',
+    '#06b6d4','#84cc16','#f97316','#ec4899','#6366f1',
+    '#0ea5e9','#a3e635','#fb923c','#f43f5e','#a78bfa',
+    '#34d399','#fbbf24','#60a5fa','#4ade80','#c084fc'
+  ];
   var FALLBACK_CONTAINERS = [
     { id: '20ST', name: "20' Standard",  volume_cbm: 33.2, max_payload_kg: 21770, description: 'Container standard da 20 piedi.',  inner_length_m: 5.898,  inner_width_m: 2.352, inner_height_m: 2.393 },
     { id: '40ST', name: "40' Standard",  volume_cbm: 67.0, max_payload_kg: 26500, description: 'Container standard da 40 piedi.',  inner_length_m: 12.032, inner_width_m: 2.352, inner_height_m: 2.393 },
@@ -25,8 +31,219 @@
     return uom === 'lbs' ? value * 0.453592 : value;
   }
 
+  /* ── MAXRECTS 2-D Bin Packing ─────────────────────────────────────────────
+     Best Short Side Fit (BSSF) heuristic with 90° rotation support.
+     Reference: Jylänki (2010) "A Thousand Ways to Pack the Bin".
+  ─────────────────────────────────────────────────────────────────────────── */
+  function MaxRects(binW, binH) {
+    this.binW = binW;
+    this.binH = binH;
+    this.freeRects = [{ x: 0, y: 0, w: binW, h: binH }];
+    this.usedRects = [];
+  }
+
+  MaxRects.prototype.insert = function (rw, rh, allowRotation) {
+    var EPS = 1e-9;
+    var best = null, bestScore = Infinity, bestRotated = false;
+    var tries = allowRotation ? [[rw, rh, false], [rh, rw, true]] : [[rw, rh, false]];
+    for (var ti = 0; ti < tries.length; ti++) {
+      var tw = tries[ti][0], th = tries[ti][1], rot = tries[ti][2];
+      for (var fi = 0; fi < this.freeRects.length; fi++) {
+        var fr = this.freeRects[fi];
+        if (tw <= fr.w + EPS && th <= fr.h + EPS) {
+          var score = Math.min(fr.w - tw, fr.h - th);
+          if (score < bestScore - EPS) {
+            bestScore = score;
+            best = { x: fr.x, y: fr.y, w: tw, h: th };
+            bestRotated = rot;
+          }
+        }
+      }
+    }
+    if (!best) return null;
+    this.usedRects.push({ x: best.x, y: best.y, w: best.w, h: best.h });
+    this._split(best);
+    this._prune();
+    return { x: best.x, y: best.y, w: best.w, h: best.h, rotated: bestRotated };
+  };
+
+  MaxRects.prototype._split = function (used) {
+    var nf = [];
+    for (var i = 0; i < this.freeRects.length; i++) {
+      var fr = this.freeRects[i];
+      if (!this._overlaps(used, fr)) { nf.push(fr); continue; }
+      if (used.x > fr.x)
+        nf.push({ x: fr.x, y: fr.y, w: used.x - fr.x, h: fr.h });
+      if (used.x + used.w < fr.x + fr.w)
+        nf.push({ x: used.x + used.w, y: fr.y, w: (fr.x + fr.w) - (used.x + used.w), h: fr.h });
+      if (used.y > fr.y)
+        nf.push({ x: fr.x, y: fr.y, w: fr.w, h: used.y - fr.y });
+      if (used.y + used.h < fr.y + fr.h)
+        nf.push({ x: fr.x, y: used.y + used.h, w: fr.w, h: (fr.y + fr.h) - (used.y + used.h) });
+    }
+    this.freeRects = nf;
+  };
+
+  MaxRects.prototype._prune = function () {
+    var rem = {}, fr = this.freeRects;
+    for (var i = 0; i < fr.length; i++)
+      for (var j = 0; j < fr.length; j++)
+        if (i !== j && this._contains(fr[j], fr[i])) { rem[i] = true; break; }
+    this.freeRects = fr.filter(function (_, idx) { return !rem[idx]; });
+  };
+
+  MaxRects.prototype._overlaps = function (a, b) {
+    return !(a.x + a.w <= b.x || b.x + b.w <= a.x ||
+             a.y + a.h <= b.y || b.y + b.h <= a.y);
+  };
+
+  MaxRects.prototype._contains = function (outer, inner) {
+    return outer.x <= inner.x && outer.y <= inner.y &&
+           outer.x + outer.w >= inner.x + inner.w &&
+           outer.y + outer.h >= inner.y + inner.h;
+  };
+
   /* ── Angular module ── */
   angular.module('containerApp', [])
+
+    /* ── Floor-plan canvas directive ────────────────────────────────────────── */
+    .directive('floorPlanCanvas', ['$window', function ($window) {
+      var PADDING  = 40;
+      var CANVAS_W = 680;
+
+      function hexToRgba(hex, a) {
+        var r = parseInt(hex.slice(1, 3), 16);
+        var g = parseInt(hex.slice(3, 5), 16);
+        var b = parseInt(hex.slice(5, 7), 16);
+        return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+      }
+
+      function darken(hex, amt) {
+        return 'rgb(' +
+          Math.max(0, parseInt(hex.slice(1, 3), 16) - amt) + ',' +
+          Math.max(0, parseInt(hex.slice(3, 5), 16) - amt) + ',' +
+          Math.max(0, parseInt(hex.slice(5, 7), 16) - amt) + ')';
+      }
+
+      function draw(canvas, ctLen, ctWid, placements) {
+        if (!canvas || !ctLen || !ctWid) return;
+        var drawW = CANVAS_W - 2 * PADDING;
+        var scale = drawW / ctLen;
+        var drawH = ctWid * scale;
+
+        canvas.width  = CANVAS_W;
+        canvas.height = Math.round(drawH) + 2 * PADDING;
+
+        var ctx = canvas.getContext('2d');
+        var ox = PADDING, oy = PADDING;
+
+        /* Floor background */
+        ctx.fillStyle = '#dce8f5';
+        ctx.fillRect(ox, oy, drawW, drawH);
+
+        /* 1 m grid */
+        ctx.strokeStyle = 'rgba(100,116,139,0.20)';
+        ctx.lineWidth = 0.8;
+        for (var gx = scale; gx < drawW - 1; gx += scale) {
+          ctx.beginPath(); ctx.moveTo(ox + gx, oy); ctx.lineTo(ox + gx, oy + drawH); ctx.stroke();
+        }
+        for (var gy = scale; gy < drawH - 1; gy += scale) {
+          ctx.beginPath(); ctx.moveTo(ox, oy + gy); ctx.lineTo(ox + drawW, oy + gy); ctx.stroke();
+        }
+
+        /* Pallets */
+        for (var i = 0; i < placements.length; i++) {
+          var p  = placements[i];
+          var px = ox + p.x * scale;
+          var py = oy + p.y * scale;
+          var pw = p.w * scale;
+          var ph = p.h * scale;
+
+          /* Fill */
+          ctx.fillStyle = hexToRgba(p.color, 0.80);
+          ctx.fillRect(px, py, pw, ph);
+
+          /* Diagonal hatching for rotated items */
+          if (p.rotated) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(px, py, pw, ph);
+            ctx.clip();
+            ctx.strokeStyle = darken(p.color, 40);
+            ctx.lineWidth = 0.7;
+            ctx.globalAlpha = 0.30;
+            var sp = 9;
+            for (var hx = -(ph); hx < pw + ph; hx += sp) {
+              ctx.beginPath();
+              ctx.moveTo(px + hx, py);
+              ctx.lineTo(px + hx + ph, py + ph);
+              ctx.stroke();
+            }
+            ctx.restore();
+          }
+
+          /* Border */
+          ctx.strokeStyle = darken(p.color, 60);
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(px + 0.75, py + 0.75, pw - 1.5, ph - 1.5);
+
+          /* Item label (clipped to box) */
+          var minSide = Math.min(pw, ph);
+          var fontSize = Math.max(7, Math.min(minSide * 0.28, 13));
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(px + 2, py + 2, pw - 4, ph - 4);
+          ctx.clip();
+          ctx.fillStyle = '#0f172a';
+          ctx.font = 'bold ' + fontSize + 'px "Segoe UI",Tahoma,sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(p.item, px + pw / 2, py + ph / 2);
+          ctx.restore();
+        }
+
+        /* Container border */
+        ctx.strokeStyle = '#1e3a5f';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(ox, oy, drawW, drawH);
+
+        /* Corner bolts */
+        var cm = 7;
+        ctx.fillStyle = '#1e3a5f';
+        [[ox, oy],[ox + drawW, oy],[ox, oy + drawH],[ox + drawW, oy + drawH]]
+          .forEach(function (c) { ctx.fillRect(c[0] - cm/2, c[1] - cm/2, cm, cm); });
+
+        /* Dimension labels */
+        ctx.fillStyle = '#334155';
+        ctx.font = '11px "Segoe UI",Tahoma,sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(ctLen.toFixed(3) + ' m  (lunghezza)', ox + drawW / 2, oy + drawH + PADDING * 0.60);
+        ctx.save();
+        ctx.translate(ox - PADDING * 0.60, oy + drawH / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillText(ctWid.toFixed(3) + ' m  (larghezza)', 0, 0);
+        ctx.restore();
+      }
+
+      return {
+        restrict: 'E',
+        scope: { placements: '=', ctLen: '=', ctWid: '=' },
+        template: '<canvas style="max-width:100%; display:block; margin:0 auto;"></canvas>',
+        link: function (scope, element) {
+          var canvas = element[0].querySelector('canvas');
+          function redraw() {
+            if (scope.placements && scope.ctLen && scope.ctWid) {
+              draw(canvas, scope.ctLen, scope.ctWid, scope.placements);
+            }
+          }
+          scope.$watch('[placements, ctLen, ctWid]', redraw, true);
+          angular.element($window).on('resize', redraw);
+          scope.$on('$destroy', function () { angular.element($window).off('resize', redraw); });
+        }
+      };
+    }])
+
     .controller('ContainerController', ['$scope', '$http', function ($scope, $http) {
 
       var _uid = 0;
@@ -150,8 +367,9 @@
           var item = r.item || ('P-' + String(i + 1).padStart(ITEM_ID_PADDING, '0'));
           var desc = r.description || '—';
 
+          var pallColor = PALLET_COLORS[i % PALLET_COLORS.length];
           for (var q = 0; q < qty; q++) {
-            pallets.push({ item: item, description: desc, volume_m3: vol, weight_kg: kg });
+            pallets.push({ item: item, description: desc, length_m: lm, width_m: wm, volume_m3: vol, weight_kg: kg, color: pallColor });
           }
         }
 
@@ -164,13 +382,17 @@
 
         var ct = $scope.selectedContainer;
 
-        /* Check single-unit feasibility */
+        /* Check single-unit feasibility (floor footprint + weight) */
         for (var pi = 0; pi < pallets.length; pi++) {
           var p = pallets[pi];
-          if (p.volume_m3 > ct.volume_cbm) {
-            $scope.formError = 'Il collo "' + p.item + '" ha volume (' +
-              p.volume_m3.toFixed(4) + ' m³) superiore alla capacità del container (' +
-              ct.volume_cbm + ' m³). Riduci le dimensioni o scegli un container diverso.';
+          var fitsFloor = (p.length_m <= ct.inner_length_m && p.width_m <= ct.inner_width_m) ||
+                          (p.width_m  <= ct.inner_length_m && p.length_m <= ct.inner_width_m);
+          if (!fitsFloor) {
+            $scope.formError = 'Il collo "' + p.item + '" (' +
+              p.length_m.toFixed(3) + ' × ' + p.width_m.toFixed(3) +
+              ' m) non entra nella pianta del container (' +
+              ct.inner_length_m.toFixed(3) + ' × ' + ct.inner_width_m.toFixed(3) +
+              ' m) nemmeno se ruotato di 90°.';
             return;
           }
           if (p.weight_kg !== null && p.weight_kg > ct.max_payload_kg) {
@@ -181,13 +403,18 @@
           }
         }
 
-        /* First-Fit Decreasing by volume */
-        pallets.sort(function (a, b) { return b.volume_m3 - a.volume_m3; });
+        /* ── MAXRECTS 2-D Floor Packing — Best Fit Decreasing by footprint area ── */
+        pallets.sort(function (a, b) { return (b.length_m * b.width_m) - (a.length_m * a.width_m); });
 
-        var bins = []; // each bin: { usedVolume, usedWeight, pallets[] }
+        var bins = [];
 
         function newBin() {
-          return { usedVolume: 0, usedWeight: 0, pallets: [] };
+          return {
+            maxrects:   new MaxRects(ct.inner_length_m, ct.inner_width_m),
+            usedVolume: 0,
+            usedWeight: 0,
+            placements: []
+          };
         }
 
         for (var pi2 = 0; pi2 < pallets.length; pi2++) {
@@ -198,10 +425,18 @@
             var bin = bins[bi];
             var weightOk = (pallet.weight_kg === null) ||
                            (bin.usedWeight + pallet.weight_kg <= ct.max_payload_kg);
-            if (bin.usedVolume + pallet.volume_m3 <= ct.volume_cbm && weightOk) {
+            if (!weightOk) continue;
+
+            var pos = bin.maxrects.insert(pallet.length_m, pallet.width_m, true);
+            if (pos) {
               bin.usedVolume += pallet.volume_m3;
               bin.usedWeight += (pallet.weight_kg !== null ? pallet.weight_kg : 0);
-              bin.pallets.push(pallet);
+              bin.placements.push({
+                item: pallet.item, description: pallet.description,
+                volume_m3: pallet.volume_m3, weight_kg: pallet.weight_kg,
+                x: pos.x, y: pos.y, w: pos.w, h: pos.h,
+                rotated: pos.rotated, color: pallet.color
+              });
               placed = true;
               break;
             }
@@ -209,23 +444,33 @@
 
           if (!placed) {
             var nb = newBin();
+            var pos2 = nb.maxrects.insert(pallet.length_m, pallet.width_m, true);
             nb.usedVolume += pallet.volume_m3;
             nb.usedWeight += (pallet.weight_kg !== null ? pallet.weight_kg : 0);
-            nb.pallets.push(pallet);
+            nb.placements.push({
+              item: pallet.item, description: pallet.description,
+              volume_m3: pallet.volume_m3, weight_kg: pallet.weight_kg,
+              x: pos2.x, y: pos2.y, w: pos2.w, h: pos2.h,
+              rotated: pos2.rotated, color: pallet.color
+            });
             bins.push(nb);
           }
         }
 
-        /* Build result containers with percentages */
+        /* Build result containers with percentages and floor plan data */
         var hasWeight = pallets.some(function (p) { return p.weight_kg !== null; });
+        var floorArea = ct.inner_length_m * ct.inner_width_m;
 
         var resultContainers = bins.map(function (bin) {
+          var usedFloor = bin.placements.reduce(function (s, p) { return s + p.w * p.h; }, 0);
           return {
-            pallets:    bin.pallets,
+            pallets:    bin.placements,   /* backward compat with pallet table */
+            placements: bin.placements,
             usedVolume: bin.usedVolume,
             usedWeight: bin.usedWeight,
-            volPct: Math.min((bin.usedVolume / ct.volume_cbm)     * MAX_PERCENT, MAX_PERCENT),
-            wgtPct: hasWeight ? Math.min((bin.usedWeight / ct.max_payload_kg) * MAX_PERCENT, MAX_PERCENT) : 0
+            volPct:   Math.min((bin.usedVolume / ct.volume_cbm)      * MAX_PERCENT, MAX_PERCENT),
+            wgtPct:   hasWeight ? Math.min((bin.usedWeight / ct.max_payload_kg) * MAX_PERCENT, MAX_PERCENT) : 0,
+            floorPct: Math.min((usedFloor / floorArea) * MAX_PERCENT, MAX_PERCENT)
           };
         });
 
@@ -238,6 +483,8 @@
           totalVolume:   totalVol,
           totalWeight:   totalWgt,
           hasWeight:     hasWeight,
+          ctLength:      ct.inner_length_m,
+          ctWidth:       ct.inner_width_m,
           containers:    resultContainers
         };
       };

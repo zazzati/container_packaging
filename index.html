@@ -166,6 +166,15 @@
                   </div>
                   <div class="util-pct">{{ cont.volPct | number:1 }}%</div>
                 </div>
+                <div class="util-row">
+                  <div class="util-label">Pianta</div>
+                  <div class="util-bar-wrap">
+                    <div class="util-bar-fill floor"
+                         ng-class="{danger: cont.floorPct > 95}"
+                         style="width: {{ cont.floorPct | number:0 }}%"></div>
+                  </div>
+                  <div class="util-pct">{{ cont.floorPct | number:1 }}%</div>
+                </div>
                 <div class="util-row" ng-if="risultati.hasWeight">
                   <div class="util-label">Peso</div>
                   <div class="util-bar-wrap">
@@ -211,6 +220,45 @@
                 </div>
               </div>
 
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 5 – Floor plan visualization -->
+      <div class="panel">
+        <div class="panel-header">🗺️ 5. Schema di posizionamento in pianta</div>
+        <div class="panel-body">
+          <p class="floor-intro">
+            Visualizzazione top-down del pavimento del container
+            (<strong>{{ risultati.ctLength | number:3 }} × {{ risultati.ctWidth | number:3 }} m</strong>).
+            I colli ruotati di 90° sono evidenziati con tratteggio diagonale.
+          </p>
+          <div class="floor-plans-wrapper">
+            <div class="floor-plan-wrap" ng-repeat="cont in risultati.containers">
+              <div class="floor-plan-title">
+                Container #{{ $index + 1 }} &mdash; {{ selectedContainer.name }}
+                <span class="floor-plan-subtitle">
+                  {{ cont.placements.length }} colli
+                  &nbsp;&middot;&nbsp;
+                  Superficie occupata: <strong>{{ cont.floorPct | number:1 }}%</strong>
+                </span>
+              </div>
+              <div class="floor-canvas-wrap">
+                <floor-plan-canvas
+                  placements="cont.placements"
+                  ct-len="risultati.ctLength"
+                  ct-wid="risultati.ctWidth">
+                </floor-plan-canvas>
+              </div>
+              <div class="floor-legend" ng-if="cont.placements.length > 0">
+                <div class="floor-legend-item" ng-repeat="p in cont.placements">
+                  <span class="floor-legend-swatch" ng-style="{'background': p.color}"></span>
+                  <span class="floor-legend-name">{{ p.item }}</span>
+                  <span class="floor-legend-dim">{{ p.w | number:2 }}&times;{{ p.h | number:2 }} m</span>
+                  <span class="floor-legend-rot" ng-if="p.rotated" title="Ruotato 90°">↻</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>

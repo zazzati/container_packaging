@@ -5,9 +5,9 @@
   var ITEM_ID_PADDING    = 3;
   var MAX_PERCENT        = 100;
   var FALLBACK_CONTAINERS = [
-    { id: '20ST', name: "20' Standard",  volume_cbm: 33.2, max_payload_kg: 21770, description: 'Container standard da 20 piedi.' },
-    { id: '40ST', name: "40' Standard",  volume_cbm: 67.0, max_payload_kg: 26500, description: 'Container standard da 40 piedi.' },
-    { id: '40HC', name: "40' High Cube", volume_cbm: 76.0, max_payload_kg: 28500, description: 'Container da 40 piedi High Cube.' }
+    { id: '20ST', name: "20' Standard",  volume_cbm: 33.2, max_payload_kg: 21770, description: 'Container standard da 20 piedi.',  inner_length_m: 5.898,  inner_width_m: 2.352, inner_height_m: 2.393 },
+    { id: '40ST', name: "40' Standard",  volume_cbm: 67.0, max_payload_kg: 26500, description: 'Container standard da 40 piedi.',  inner_length_m: 12.032, inner_width_m: 2.352, inner_height_m: 2.393 },
+    { id: '40HC', name: "40' High Cube", volume_cbm: 76.0, max_payload_kg: 28500, description: 'Container da 40 piedi High Cube.', inner_length_m: 12.032, inner_width_m: 2.352, inner_height_m: 2.698 }
   ];
 
   /* ── Unit conversion helpers ── */

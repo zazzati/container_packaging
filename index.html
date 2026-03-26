@@ -44,6 +44,7 @@
             <div class="card-title">{{ ct.name }}</div>
             <div class="card-stat">Volume: <span>{{ ct.volume_cbm }} m³</span></div>
             <div class="card-stat">Payload max: <span>{{ ct.max_payload_kg | number:0 }} kg</span></div>
+            <div class="card-stat">Dim. interne: <span>{{ ct.inner_length_m }} × {{ ct.inner_width_m }} × {{ ct.inner_height_m }} m</span></div>
             <div class="card-stat" style="font-size:.78rem; color:#94a3b8; margin-top:4px;">{{ ct.description }}</div>
             <div class="card-badge" ng-if="selectedContainer.id === ct.id">✔ Selezionato</div>
           </div>

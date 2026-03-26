@@ -40,7 +40,32 @@
     this.binH = binH;
     this.gap  = (gap > 0) ? gap : 0;
     var g = this.gap;
-    this.freeRects = [{ x: g, y: g, w: Math.max(0, binW - 2 * g), h: Math.max(0, binH - 2 * g) }];
+    /*
+     * Geometry of the gap model
+     * --------------------------
+     * We want gap T between every item AND between items and walls.
+     *
+     * Layout (1-D example, 2 items):
+     *   | T | item1 | T | item2 | T | wall
+     *   ^^^                         ^^^
+     *   start-offset                far-wall clearance
+     *
+     * Implementation
+     *   • Shift origin to (g, g)  → guarantees left/top wall gap = T.
+     *   • Free rect SIZE = (binW − g, binH − g):  only ONE g removed per axis.
+     *   • Each item padded to (W+g, H+g) when searching:  reserves T after  
+     *     the item, which either becomes the gap to the NEXT item or (for the
+     *     last item) satisfies the far-wall clearance via the padded edge   
+     *     reaching at most binW resp. binH (= origin + free-rect size = g+(binW-g)).
+     *
+     * Accounting for N items of equal width W side-by-side:
+     *   Space consumed = g + N*(W+g) = g + NW + Ng = (N+1)*g + N*W  ✔
+     *   (exactly: one gap per wall + one gap between every pair of items)
+     *
+     * With the old (binW-2g) approach, space consumed = (N+2)*g + N*W  ✗
+     * (one extra gap)  → caused pallets to overflow when they should fit.
+     */
+    this.freeRects = [{ x: g, y: g, w: Math.max(0, binW - g), h: Math.max(0, binH - g) }];
     this.usedRects = [];
   }
 
@@ -185,11 +210,12 @@
           Math.max(0, parseInt(hex.slice(5, 7), 16) - amt) + ')';
       }
 
-      function draw(canvas, ctLen, ctWid, placements) {
+      function draw(canvas, ctLen, ctWid, placements, gap) {
         if (!canvas || !ctLen || !ctWid) return;
         var drawW = CANVAS_W - 2 * PADDING;
         var scale = drawW / ctLen;
         var drawH = ctWid * scale;
+        var gapPx = (gap > 0) ? gap * scale : 0;  /* gap in pixels */
 
         canvas.width  = CANVAS_W;
         canvas.height = Math.round(drawH) + 2 * PADDING;
@@ -219,11 +245,26 @@
           var pw = p.w * scale;
           var ph = p.h * scale;
 
-          /* Fill */
+          /* Gap-zone: dashed semi-transparent outline (shows tolerance space) */
+          if (gapPx > 0.5) {
+            ctx.save();
+            ctx.strokeStyle = hexToRgba(p.color, 0.45);
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 3]);
+            /* The claimed zone spans the item PLUS the trailing gap on right/bottom.
+               For the first item the left/top gap comes from the bin offset (wall), 
+               so we just show the right/bottom trailing gap extent. */
+            ctx.strokeRect(
+              px - 0.5,
+              py - 0.5,
+              pw + gapPx + 0.5,
+              ph + gapPx + 0.5
+            );
+            ctx.setLineDash([]);
+            ctx.restore();
+          }
           ctx.fillStyle = hexToRgba(p.color, 0.80);
           ctx.fillRect(px, py, pw, ph);
-
-          /* Diagonal hatching for rotated items */
           if (p.rotated) {
             ctx.save();
             ctx.beginPath();
@@ -242,7 +283,7 @@
             ctx.restore();
           }
 
-          /* Border */
+          /* Solid border */
           ctx.strokeStyle = darken(p.color, 60);
           ctx.lineWidth = 1.5;
           ctx.strokeRect(px + 0.75, py + 0.75, pw - 1.5, ph - 1.5);
@@ -288,16 +329,16 @@
 
       return {
         restrict: 'E',
-        scope: { placements: '=', ctLen: '=', ctWid: '=' },
+        scope: { placements: '=', ctLen: '=', ctWid: '=', gap: '=' },
         template: '<canvas style="max-width:100%; display:block; margin:0 auto;"></canvas>',
         link: function (scope, element) {
           var canvas = element[0].querySelector('canvas');
           function redraw() {
             if (scope.placements && scope.ctLen && scope.ctWid) {
-              draw(canvas, scope.ctLen, scope.ctWid, scope.placements);
+              draw(canvas, scope.ctLen, scope.ctWid, scope.placements, scope.gap || 0);
             }
           }
-          scope.$watch('[placements, ctLen, ctWid]', redraw, true);
+          scope.$watch('[placements, ctLen, ctWid, gap]', redraw, true);
           angular.element($window).on('resize', redraw);
           scope.$on('$destroy', function () { angular.element($window).off('resize', redraw); });
         }
@@ -542,16 +583,18 @@
         }
 
         /* Check single-unit feasibility:
-           Item (+ trailing gap) must fit in the effective area (bin minus wall clearance).
-           Condition: itemDim + gap ≤ effDim  (since insert pads by gap and bin is shrunk by 2×gap) */
+           A single item must fit inside the initial free rect.
+           Free rect size = (binDim - g), item padded to (dim + g),
+           so condition is:  dim + g ≤ binDim - g  ⇒  dim ≤ binDim - 2g = effDim. */
         for (var pi = 0; pi < pallets.length; pi++) {
           var p = pallets[pi];
-          var fitsFloor = (p.length_m + gapM <= effLen && p.width_m + gapM <= effWid) ||
-                          (p.width_m  + gapM <= effLen && p.length_m + gapM <= effWid);
+          var fitsFloor = (p.length_m <= effLen && p.width_m <= effWid) ||
+                          (p.width_m  <= effLen && p.length_m <= effWid);
           if (!fitsFloor) {
             $scope.formError = 'Il collo "' + p.item + '" (' +
               p.length_m.toFixed(3) + ' × ' + p.width_m.toFixed(3) +
-              ' m) non entra nell\'area utile del container con tolleranza ' + (gapM * 100).toFixed(0) + ' cm (' +
+              ' m) non entra nel container con tolleranza ' + (gapM * 100).toFixed(0) + ' cm ' +
+              '(dimensione massima imbarcabile: ' +
               effLen.toFixed(3) + ' × ' + effWid.toFixed(3) +
               ' m) nemmeno se ruotato di 90°.';
             return;
@@ -646,6 +689,7 @@
           hasWeight:     hasWeight,
           ctLength:      ct.inner_length_m,
           ctWidth:       ct.inner_width_m,
+          gapM:          gapM,
           containers:    resultContainers
         };
       };

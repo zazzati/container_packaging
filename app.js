@@ -472,6 +472,7 @@
       /* ── Auto-save session (debounced 600 ms) ── */
       var _initialized = false;
       var _saveTimer   = null;
+      var _calcTimer   = null;  /* debounce for gap-triggered recalc */
 
       function _rowsSnapshot(rows) {
         return rows.map(function (r) {
@@ -502,7 +503,26 @@
         _initialized = true;
         $scope.$watch('rows', _scheduleSave, true);
         $scope.$watch('selectedContainer', _scheduleSave);
-        $scope.$watch('gapCm', _scheduleSave);
+
+        /* gapCm: save to IndexedDB AND auto-recalculate (debounced 600ms).
+           This makes the effect of changing tolerance immediately visible
+           without the user needing to manually click “Calcola” again.
+           The debounce prevents intermediate calculations while the user
+           is still typing (e.g. clearing "10" before entering "40"). */
+        $scope.$watch('gapCm', function (newVal, oldVal) {
+          _scheduleSave();
+          if (+newVal === +oldVal) return;          /* skip when numeric value unchanged (handles string/number coercion) */
+          $scope.risultati = null;
+          $scope.formError = '';
+          var hasData = $scope.rows.some(function (r) {
+            return parseFloat(r.length) > 0 &&
+                   parseFloat(r.width)  > 0 &&
+                   parseFloat(r.height) > 0;
+          });
+          if (!hasData) return;
+          if (_calcTimer) $timeout.cancel(_calcTimer);
+          _calcTimer = $timeout(function () { $scope.calcola(); }, 600);
+        });
       }
 
       $scope.fmtWeight = function (kg) {
@@ -519,9 +539,17 @@
           return;
         }
 
-        /* Parse and validate gap tolerance */
-        var gapCmRaw = parseFloat($scope.gapCm);
-        var gapM = (!isNaN(gapCmRaw) && gapCmRaw >= 0) ? gapCmRaw / 100 : 0.10;
+        /* Parse and validate gap tolerance.
+           Use (+value) coercion so both Number and String model values work.
+           isFinite() rejects NaN and Infinity. Falls back to 10 cm if blank/invalid. */
+        var gapCmRaw = ($scope.gapCm == null) ? NaN : +$scope.gapCm;
+        var gapM = (isFinite(gapCmRaw) && gapCmRaw >= 0) ? gapCmRaw / 100 : 0.10;
+        /* Only write back when the input was invalid/empty (restores 10 in the field).
+           Do NOT write back for valid inputs: it would coerce the type (string→number)
+           and trigger the gapCm watch, which would clear the results we're about to set. */
+        if (!isFinite(gapCmRaw) || gapCmRaw < 0) {
+          $scope.gapCm = Math.round(gapM * 100);
+        }
 
         var ct = $scope.selectedContainer;
 
@@ -690,6 +718,7 @@
           ctLength:      ct.inner_length_m,
           ctWidth:       ct.inner_width_m,
           gapM:          gapM,
+          gapCm:         Math.round(gapM * 100),   /* tolerance actually applied */
           containers:    resultContainers
         };
       };

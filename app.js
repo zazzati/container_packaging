@@ -252,12 +252,11 @@
           var scene = new THREE.Scene();
           scene.background = new THREE.Color(0xf1f5f9);
 
-          var w = container.clientWidth  || 680;
-          var h = container.clientHeight || 500;
-          var camera   = new THREE.PerspectiveCamera(45, w / h, 0.01, 500);
+          var camera   = new THREE.PerspectiveCamera(45, 1, 0.01, 500);
           var renderer = new THREE.WebGLRenderer({ antialias: true });
           renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-          renderer.setSize(w, h);
+          /* Initial size will be set in buildScene / syncSize */
+          renderer.setSize(1, 1);
           container.appendChild(renderer.domElement);
 
           var controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -271,6 +270,15 @@
 
           var boxGroup = new THREE.Group();
           scene.add(boxGroup);
+
+          /* ── Sync renderer & camera to current container size ── */
+          function syncSize() {
+            var nw = container.clientWidth, nh = container.clientHeight;
+            if (!nw || !nh) return;
+            camera.aspect = nw / nh;
+            camera.updateProjectionMatrix();
+            renderer.setSize(nw, nh);
+          }
 
           /* ── Helpers ── */
           function clearGroup() {
@@ -290,6 +298,9 @@
             clearGroup();
             var L = scope.ctLen, W = scope.ctWid, H = scope.ctHei;
             if (!L || !W || !H) return;
+
+            /* Always sync renderer size to current DOM layout */
+            syncSize();
 
             /* Container wireframe */
             var ctGeo = new THREE.BoxGeometry(L, H, W);
@@ -366,10 +377,11 @@
               boxGroup.add(sprite);
             }
 
-            /* Position camera */
+            /* Position camera to frame the entire container */
             var maxDim = Math.max(L, W, H);
-            camera.position.set(L * 1.2, maxDim * 1.1, W * 2.0);
-            controls.target.set(L / 2, H / 3, W / 2);
+            var dist   = maxDim * 1.8;
+            camera.position.set(L * 0.8 + dist * 0.4, H * 0.5 + dist * 0.35, W * 0.5 + dist * 0.6);
+            controls.target.set(L / 2, H / 2, W / 2);
             controls.update();
           }
 
@@ -383,21 +395,28 @@
           animate();
 
           /* ── Watchers ── */
+          /* Defer first build to next frame so DOM layout is finalized */
+          var buildTimer = null;
+          function scheduleBuild() {
+            if (buildTimer) cancelAnimationFrame(buildTimer);
+            buildTimer = requestAnimationFrame(function () {
+              buildTimer = null;
+              if (scope.ctLen && scope.ctWid && scope.ctHei) buildScene();
+            });
+          }
+
           scope.$watch('[placements, ctLen, ctWid, ctHei]', function () {
-            if (scope.ctLen && scope.ctWid && scope.ctHei) buildScene();
+            scheduleBuild();
           }, true);
 
           function onResize() {
-            var nw = container.clientWidth, nh = container.clientHeight;
-            if (!nw || !nh) return;
-            camera.aspect = nw / nh;
-            camera.updateProjectionMatrix();
-            renderer.setSize(nw, nh);
+            syncSize();
           }
           angular.element($window).on('resize', onResize);
 
           scope.$on('$destroy', function () {
             cancelAnimationFrame(animId);
+            if (buildTimer) cancelAnimationFrame(buildTimer);
             angular.element($window).off('resize', onResize);
             clearGroup();
             renderer.dispose();

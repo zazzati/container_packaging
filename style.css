@@ -287,6 +287,7 @@ select.tbl-input { cursor: pointer; }
 
 /* ── Floor utilization bar ── */
 .util-bar-fill.floor { background: #f59e0b; }
+.util-bar-fill.height { background: #8b5cf6; }
 
 /* ── Floor plan section ── */
 .floor-intro {
@@ -336,6 +337,12 @@ select.tbl-input { cursor: pointer; }
   overflow-x: auto;
 }
 
+.three-canvas-wrap {
+  background: #f1f5f9;
+  padding: 0;
+  overflow: hidden;
+}
+
 .floor-legend {
   display: flex;
   flex-wrap: wrap;
@@ -365,6 +372,7 @@ select.tbl-input { cursor: pointer; }
 .floor-legend-name { font-weight: 700; }
 .floor-legend-dim  { color: #64748b; }
 .floor-legend-rot  { color: #d97706; font-weight: 700; font-size: .9rem; }
+.floor-legend-stack { color: #7c3aed; font-weight: 600; font-size: .75rem; margin-left: 2px; }
 
 /* ── Responsive ── */
 @media (max-width: 640px) {

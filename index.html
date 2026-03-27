@@ -6,6 +6,8 @@
   <title>Ottimizzazione Carico Container</title>
   <link rel="stylesheet" href="style.css">
   <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.8.3/angular.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
 <body ng-controller="ContainerController">
 
@@ -169,7 +171,7 @@
                   <div class="util-bar-wrap">
                     <div class="util-bar-fill vol"
                          ng-class="{danger: cont.volPct > 95}"
-                         style="width: {{ cont.volPct | number:0 }}%"></div>
+                         ng-style="{width: cont.volPct + '%'}"></div>
                   </div>
                   <div class="util-pct">{{ cont.volPct | number:1 }}%</div>
                 </div>
@@ -178,7 +180,7 @@
                   <div class="util-bar-wrap">
                     <div class="util-bar-fill floor"
                          ng-class="{danger: cont.floorPct > 95}"
-                         style="width: {{ cont.floorPct | number:0 }}%"></div>
+                         ng-style="{width: cont.floorPct + '%'}"></div>
                   </div>
                   <div class="util-pct">{{ cont.floorPct | number:1 }}%</div>
                 </div>
@@ -187,11 +189,18 @@
                   <div class="util-bar-wrap">
                     <div class="util-bar-fill wgt"
                          ng-class="{danger: cont.wgtPct > 95}"
-                         style="width: {{ cont.wgtPct | number:0 }}%"></div>
+                         ng-style="{width: cont.wgtPct + '%'}"></div>
                   </div>
                   <div class="util-pct">{{ cont.wgtPct | number:1 }}%</div>
-                </div>
-                <div style="font-size:.77rem; color:#64748b; margin-top:6px;">
+                </div>                <div class="util-row">
+                  <div class="util-label">Altezza</div>
+                  <div class="util-bar-wrap">
+                    <div class="util-bar-fill height"
+                         ng-class="{danger: cont.heightPct > 95}"
+                         ng-style="{width: cont.heightPct + '%'}"></div>
+                  </div>
+                  <div class="util-pct">{{ cont.heightPct | number:1 }}%</div>
+                </div>                <div style="font-size:.77rem; color:#64748b; margin-top:6px;">
                   Vol. usato: <strong>{{ cont.usedVolume | number:3 }} m³</strong> /
                   {{ selectedContainer.volume_cbm }} m³
                   <span ng-if="risultati.hasWeight">
@@ -232,14 +241,14 @@
         </div>
       </div>
 
-      <!-- Step 5 – Floor plan visualization -->
+      <!-- Step 5 – 3D Container Visualization -->
       <div class="panel">
-        <div class="panel-header">🗺️ 5. Schema di posizionamento in pianta</div>
+        <div class="panel-header">🗺️ 5. Visualizzazione 3D del container</div>
         <div class="panel-body">
           <p class="floor-intro">
-            Visualizzazione top-down del pavimento del container
-            (<strong>{{ risultati.ctLength | number:3 }} × {{ risultati.ctWidth | number:3 }} m</strong>).
-            I colli ruotati di 90° sono evidenziati con tratteggio diagonale.
+            Visualizzazione 3D del carico nel container
+            (<strong>{{ risultati.ctLength | number:3 }} × {{ risultati.ctWidth | number:3 }} × {{ risultati.ctHeight | number:3 }} m</strong>).
+            Usa il mouse per ruotare (trascina), zoomare (scroll) e spostare (tasto destro + trascina).
           </p>
           <div class="floor-plans-wrapper">
             <div class="floor-plan-wrap" ng-repeat="cont in risultati.containers">
@@ -248,22 +257,26 @@
                 <span class="floor-plan-subtitle">
                   {{ cont.placements.length }} colli
                   &nbsp;&middot;&nbsp;
-                  Superficie occupata: <strong>{{ cont.floorPct | number:1 }}%</strong>
+                  Volume: <strong>{{ cont.volPct | number:1 }}%</strong>
+                  &nbsp;&middot;&nbsp;
+                  Altezza max: <strong>{{ cont.maxHeight | number:2 }} m</strong>
                 </span>
               </div>
-              <div class="floor-canvas-wrap">
-                <floor-plan-canvas
+              <div class="three-canvas-wrap">
+                <container-3d-view
                   placements="cont.placements"
                   ct-len="risultati.ctLength"
-                  ct-wid="risultati.ctWidth">
-                </floor-plan-canvas>
+                  ct-wid="risultati.ctWidth"
+                  ct-hei="risultati.ctHeight">
+                </container-3d-view>
               </div>
               <div class="floor-legend" ng-if="cont.placements.length > 0">
                 <div class="floor-legend-item" ng-repeat="p in cont.placements">
                   <span class="floor-legend-swatch" ng-style="{'background': p.color}"></span>
                   <span class="floor-legend-name">{{ p.item }}</span>
-                  <span class="floor-legend-dim">{{ p.w | number:2 }}&times;{{ p.h | number:2 }} m</span>
+                  <span class="floor-legend-dim">{{ p.l | number:2 }}&times;{{ p.w | number:2 }}&times;{{ p.h | number:2 }} m</span>
                   <span class="floor-legend-rot" ng-if="p.rotated" title="Ruotato 90°">↻</span>
+                  <span class="floor-legend-stack" ng-if="p.z > 0.01" title="Impilato a {{ p.z | number:2 }} m">⬆ {{ p.z | number:2 }}m</span>
                 </div>
               </div>
             </div>

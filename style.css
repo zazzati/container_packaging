@@ -21,6 +21,13 @@ body {
 .topbar .logo { font-size: 2rem; }
 .topbar h1 { font-size: 1.35rem; font-weight: 700; letter-spacing: .3px; }
 .topbar p  { font-size: .85rem; opacity: .82; margin-top: 2px; }
+.topbar-copy {
+  margin-left: auto;
+  font-size: .78rem;
+  opacity: .78;
+  white-space: nowrap;
+  font-style: italic;
+}
 
 /* ── Main layout ── */
 .main { max-width: 1400px; margin: 0 auto; padding: 28px 20px 60px; }
@@ -119,6 +126,9 @@ tbody td { padding: 8px 8px; vertical-align: middle; }
 .tbl-input.invalid { border-color: #ef4444; }
 
 select.tbl-input { cursor: pointer; }
+
+/* Compact description input – width controlled by column header */
+.tbl-desc { min-width: 80px; }
 
 /* row actions */
 .btn-del {
@@ -377,6 +387,16 @@ select.tbl-input { cursor: pointer; }
 /* ── Responsive ── */
 @media (max-width: 640px) {
   .topbar h1 { font-size: 1.1rem; }
+  .topbar-copy { font-size: .7rem; }
   .cont-result-grid { grid-template-columns: 1fr; }
   .floor-plan-wrap { flex: 1 1 100%; }
+
+  /* Larger touch targets in pallet input table */
+  .tbl-input {
+    padding: 10px 6px;
+    font-size: 1rem;
+    min-height: 40px;
+  }
+  /* Make numeric columns a bit wider on mobile */
+  table thead th, table tbody td { padding: 8px 5px; }
 }
